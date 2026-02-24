@@ -1,0 +1,208 @@
+version "21.4R3.12";
+system {
+    host-name QFX-Spine-Switch-01;
+    root-authentication {
+        encrypted-password "$6$spine456$abc123"; ## SECRET-DATA
+    }
+    name-server {
+        8.8.8.8;
+        8.8.4.4;
+    }
+    syslog {
+        host 10.2.2.1 {
+            any info;
+        }
+        host 10.2.2.2 {
+            any info;
+        }
+    }
+    ntp {
+        server 10.1.1.1;
+        server 10.1.1.2;
+    }
+    radius-server {
+        10.3.3.1 {
+            secret "$9$radiuskey456"; ## SECRET-DATA
+            timeout 10;
+            retry-count 3;
+        }
+    }
+    authentication-order [ radius password ];
+}
+chassis {
+    aggregated-devices {
+        ethernet {
+            device-count 101;
+        }
+    }
+}
+interfaces {
+    et-0/0/0 {
+        description "Leaf-01-Uplink";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Infrastructure Services ];
+                }
+            }
+        }
+    }
+    et-0/0/1 {
+        description "Leaf-02-Uplink";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Infrastructure Services ];
+                }
+            }
+        }
+    }
+    et-0/0/2 {
+        description "Leaf-03-Uplink";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Infrastructure Services ];
+                }
+            }
+        }
+    }
+    et-0/0/3 {
+        description "Leaf-04-Uplink";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Infrastructure Services ];
+                }
+            }
+        }
+    }
+    ae100 {
+        description "Spine-to-Spine-LAG";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Infrastructure Services ];
+                }
+            }
+        }
+    }
+    et-0/0/4 {
+        description "Port-Channel-100-Member-01";
+        ether-options {
+            802.3ad ae100;
+        }
+    }
+    et-0/0/5 {
+        description "Port-Channel-100-Member-02";
+        ether-options {
+            802.3ad ae100;
+        }
+    }
+    vlan {
+        unit 1000 {
+            description "Infrastructure-VLAN-Interface";
+            family inet {
+                address 10.0.10.1/24;
+            }
+        }
+        unit 2000 {
+            description "Services-VLAN-Interface";
+            family inet {
+                address 10.0.1.1/24;
+            }
+        }
+    }
+    lo0 {
+        unit 0 {
+            description "Router-ID-Loopback";
+            family inet {
+                address 10.0.0.1/32;
+            }
+        }
+    }
+    lo1 {
+        unit 0 {
+            description "Management-Loopback";
+            family inet {
+                address 10.0.0.2/32;
+            }
+        }
+    }
+}
+vlans {
+    Infrastructure {
+        vlan-id 1000;
+        description "Infrastructure VLAN";
+    }
+    Services {
+        vlan-id 2000;
+        description "Services VLAN";
+    }
+}
+protocols {
+    bgp {
+        group spine-peers {
+            type external;
+            local-address 10.0.0.1;
+            neighbor 10.0.0.10 {
+                peer-as 65001;
+                description "Spine-02";
+                multihop {
+                    ttl 3;
+                }
+            }
+        }
+        group leaf-peers {
+            type external;
+            local-address 10.0.0.1;
+            neighbor 10.0.0.20 {
+                peer-as 65002;
+                description "Leaf-01";
+                multihop {
+                    ttl 2;
+                }
+            }
+            neighbor 10.0.0.21 {
+                peer-as 65002;
+                description "Leaf-02";
+                multihop {
+                    ttl 2;
+                }
+            }
+            neighbor 10.0.0.22 {
+                peer-as 65002;
+                description "Leaf-03";
+                multihop {
+                    ttl 2;
+                }
+            }
+            neighbor 10.0.0.23 {
+                peer-as 65002;
+                description "Leaf-04";
+                multihop {
+                    ttl 2;
+                }
+            }
+        }
+    }
+}
+routing-options {
+    autonomous-system 65000;
+    static {
+        route 0.0.0.0/0 next-hop 10.0.0.254;
+        route 172.16.0.0/16 next-hop 10.0.0.20;
+        route 172.17.0.0/16 next-hop 10.0.0.21;
+    }
+    router-id 10.0.0.1;
+}

@@ -1,0 +1,221 @@
+! Cisco NX-OS Test Configuration 1 - Data Center Edge Switch
+!Command: show running-config
+!Time: Mon Feb 12 14:30:00 2024
+version 9.3(5)
+hostname DC-Edge-Switch-01
+
+feature telnet
+feature ssh
+feature bgp
+feature vpc
+feature lldp
+
+username admin password 5 $1$xyz789 role network-admin
+username operator password 5 $1$abc123 role network-operator
+username guest password 5 $1$def456 role network-operator
+
+ip domain-lookup
+ip name-server 1.1.1.1
+ip name-server 1.0.0.1
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1 prefer
+ntp server 10.1.1.2
+
+logging server 10.2.2.1 6
+logging server 10.2.2.2 6
+
+radius-server host 10.3.3.1 key 7 "radiuskey456" timeout 5 retransmit 2
+
+vlan 1
+  name default
+
+vlan 10
+  name Management
+  description Management network VLAN
+
+vlan 20
+  name Servers
+  description Server network VLAN
+
+vlan 30
+  name Storage
+  description Storage network VLAN
+
+vlan 40
+  name DMZ
+  description DMZ network VLAN
+
+interface Ethernet1/1
+  description Uplink-to-Core-01
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20,30,40
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/2
+  description Uplink-to-Core-02
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20,30,40
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/3
+  description Server-Farm-01
+  switchport mode access
+  switchport access vlan 20
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/4
+  description Server-Farm-02
+  switchport mode access
+  switchport access vlan 20
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/5
+  description Storage-Array-01
+  switchport mode access
+  switchport access vlan 30
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/6
+  description Storage-Array-02
+  switchport mode access
+  switchport access vlan 30
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/7
+  description DMZ-Server-01
+  switchport mode access
+  switchport access vlan 40
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/8
+  description DMZ-Server-02
+  switchport mode access
+  switchport access vlan 40
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface port-channel10
+  description VPC-Peer-Link
+  switchport mode trunk
+  switchport trunk allowed vlan 1-4094
+  mtu 9000
+  vpc peer-link
+
+interface port-channel20
+  description Uplink-LAG-to-Core
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20,30,40
+  mtu 9000
+  vpc 10
+
+interface port-channel30
+  description Server-Farm-LAG
+  switchport mode access
+  switchport access vlan 20
+  mtu 1500
+
+interface Ethernet1/9
+  description Port-Channel-10-Member-01-Peer-Link
+  switchport mode trunk
+  switchport trunk allowed vlan 1-4094
+  channel-group 10 mode active
+  no shutdown
+
+interface Ethernet1/10
+  description Port-Channel-10-Member-02-Peer-Link
+  switchport mode trunk
+  switchport trunk allowed vlan 1-4094
+  channel-group 10 mode active
+  no shutdown
+
+interface Ethernet1/11
+  description Port-Channel-20-Member-01-Uplink
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20,30,40
+  channel-group 20 mode active
+  no shutdown
+
+interface Ethernet1/12
+  description Port-Channel-20-Member-02-Uplink
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20,30,40
+  channel-group 20 mode active
+  no shutdown
+
+interface Ethernet1/13
+  description Port-Channel-30-Member-01
+  switchport mode access
+  switchport access vlan 20
+  channel-group 30 mode active
+  no shutdown
+
+interface Ethernet1/14
+  description Port-Channel-30-Member-02
+  switchport mode access
+  switchport access vlan 20
+  channel-group 30 mode active
+  no shutdown
+
+interface vlan 10
+  description Management-VLAN-Interface
+  ip address 192.168.10.1 255.255.255.0
+  no shutdown
+
+interface vlan 20
+  description Server-VLAN-Interface
+  ip address 192.168.20.1 255.255.255.0
+  no shutdown
+
+interface vlan 30
+  description Storage-VLAN-Interface
+  ip address 192.168.30.1 255.255.255.0
+  mtu 9000
+  no shutdown
+
+interface vlan 40
+  description DMZ-VLAN-Interface
+  ip address 192.168.40.1 255.255.255.0
+  no shutdown
+
+interface loopback0
+  ip address 10.0.0.1 255.255.255.255
+  description Router-ID-Loopback
+
+vpc domain 10
+  peer-keepalive destination 192.168.10.2 source 192.168.10.1
+  role priority 100
+  system-priority 1000
+
+router bgp 65010
+  router-id 10.0.0.1
+  address-family ipv4 unicast
+    redistribute direct route-map DIRECT-TO-BGP
+  neighbor 10.10.10.1
+    remote-as 65001
+    description Core-Router-01
+    update-source loopback0
+  neighbor 10.10.10.2
+    remote-as 65001
+    description Core-Router-02
+    update-source loopback0
+    ebgp-multihop 5
+
+ip route 0.0.0.0/0 192.168.10.254

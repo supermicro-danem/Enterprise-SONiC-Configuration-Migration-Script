@@ -1,0 +1,193 @@
+# Cumulus Linux NCLU Configuration - DC Access Switch with VRR
+# Device: DC-Access-VRR-Cumulus-01
+# Cumulus Linux Version: 4.5.x
+# Format: net show configuration commands output
+#         (copy/paste into IS-CLI or apply with: sudo net commit)
+#
+# Source config translated:
+#   cisco_nxos_test2.txt   (Access-Switch-01 - VRRP first-hop redundancy)
+#
+# Translation map:
+#   NX-OS vrrp <group> / address <vip> / priority / preempt
+#                                          -> net add vlan <id> ip address-virtual
+#
+# IMPORTANT BEHAVIORAL DIFFERENCES - NX-OS VRRP vs Cumulus VRR:
+#
+#   1. Active/Standby vs Active/Active:
+#      NX-OS VRRP = one primary forwards; standby takes over on failure.
+#      Cumulus VRR = BOTH switches forward simultaneously (active/active).
+#      Both switches have the same virtual MAC and virtual IP configured;
+#      both respond to ARP for the virtual IP. Traffic distribution depends
+#      on the upstream topology (typically MLAG with bonded uplinks).
+#
+#   2. Priority and Preempt have no equivalent in VRR:
+#      NX-OS VRRP priority 110 / preempt -> not applicable.
+#      VRR has no election; both peers always forward.
+#
+#   3. Virtual MAC format:
+#      NX-OS VRRP auto-derives: 00:00:5e:00:01:<group_hex>
+#        Group 1 -> 00:00:5e:00:01:01
+#        Group 2 -> 00:00:5e:00:01:02
+#      Cumulus VRR requires an explicit MAC in address-virtual.
+#      VRRP-convention MACs are used here to preserve ARP table continuity
+#      when migrating from a VRRP deployment to VRR.
+#      For new (non-migration) deployments, Cumulus recommends:
+#        44:38:39:ff:00:<vlan_hex> (e.g., 44:38:39:ff:00:64 for VLAN 100)
+#
+#   4. VLAN 300 (Guest): NX-OS test2 has no VRRP on VLAN 300.
+#      This config matches: no VRR on VLAN 300.
+#
+#   5. This config = ONE of two VRR peers. The peer switch uses identical
+#      address-virtual entries (same MAC + VIP) but a different real address
+#      on each SVI (e.g., 192.168.100.2/24 on VLAN 100).
+#
+# OUT OF SCOPE FOR NCLU - requires direct file edits:
+#   NTP server prefer keyword           -> /etc/ntp.conf (not available in NCLU)
+#
+# DESIGN NOTE - LACP rate:
+#   NX-OS channel-group mode active defaults to slow LACP (30-second PDUs).
+#   bond lacp-rate fast uses 1-second PDUs (Cumulus recommended). Use
+#   "bond lacp-rate slow" to match the reference config exactly.
+# ============================================================================
+
+# --- System ---
+net add hostname DC-Access-VRR-Cumulus-01
+
+# --- Loopback ---
+net add loopback lo ip address 10.0.0.3/32
+
+# --- DNS ---
+# NX-OS: ip name-server 8.8.8.8
+net add dns nameserver ipv4 8.8.8.8
+
+# --- NTP ---
+# NX-OS: ntp server 10.1.1.1
+# NOTE: "prefer" keyword not available via NCLU. Set in /etc/ntp.conf if needed.
+net add time ntp server 10.1.1.1 iburst
+
+# --- Syslog ---
+# NX-OS: logging server 10.2.2.1
+net add syslog host ipv4 10.2.2.1 port udp 514
+
+# --- SNMP ---
+# NX-OS: snmp-server community public ro
+net add snmp-server listening-address all
+net add snmp-server readonly-community public access any
+
+# --- Bridge (VLAN-aware mode) ---
+# VLANs 100 (Users), 200 (Voice), 300 (Guest)
+# NX-OS: vlan 100 / vlan 200 / vlan 300
+# bridge-pvid 1: default native VLAN; swp3 and swp4 override with pvid 100.
+net add bridge bridge vlan-aware
+net add bridge bridge vids 100,200,300
+net add bridge bridge pvid 1
+
+# --- User Access Ports (VLAN 100) ---
+# NX-OS Ethernet1/1: access vlan 100, mtu 1500, 1G
+net add interface swp1 alias Access-Port-01
+net add interface swp1 mtu 1500
+net add interface swp1 link speed 1000
+net add interface swp1 bridge access 100
+net add bridge bridge ports swp1
+
+# NX-OS Ethernet1/2: access vlan 100, mtu 1500, 1G
+net add interface swp2 alias Access-Port-02
+net add interface swp2 mtu 1500
+net add interface swp2 link speed 1000
+net add interface swp2 bridge access 100
+net add bridge bridge ports swp2
+
+# --- Voice Trunk Ports (VLANs 100 + 200, native VLAN 100) ---
+# NX-OS Ethernet1/3: trunk allowed vlan 100,200 / trunk native vlan 100
+#
+# bridge trunk vlans 100,200: allows tagged traffic for both VLANs
+# bridge pvid 100: untagged frames ingress as VLAN 100 (IP phone data VLAN).
+#   Per-port override of the bridge-level pvid 1.
+net add interface swp3 alias Voice-Port-01
+net add interface swp3 mtu 1500
+net add interface swp3 link speed 1000
+net add interface swp3 bridge trunk vlans 100,200
+net add interface swp3 bridge pvid 100
+net add bridge bridge ports swp3
+
+# NX-OS Ethernet1/4: same voice trunk config
+net add interface swp4 alias Voice-Port-02
+net add interface swp4 mtu 1500
+net add interface swp4 link speed 1000
+net add interface swp4 bridge trunk vlans 100,200
+net add interface swp4 bridge pvid 100
+net add bridge bridge ports swp4
+
+# --- Guest Access Port (VLAN 300) ---
+# NX-OS Ethernet1/5: access vlan 300, mtu 1500, 1G
+net add interface swp5 alias Guest-Port-01
+net add interface swp5 mtu 1500
+net add interface swp5 link speed 1000
+net add interface swp5 bridge access 300
+net add bridge bridge ports swp5
+
+# --- Uplink Trunk to Distribution (standalone port) ---
+# NX-OS Ethernet1/6: trunk allowed vlan 100,200,300, mtu 9000, 10G
+net add interface swp6 alias Uplink-to-Distribution
+net add interface swp6 mtu 9000
+net add interface swp6 link speed 10000
+net add interface swp6 bridge trunk vlans 100,200,300
+net add bridge bridge ports swp6
+
+# --- Uplink LAG Bond ---
+# NX-OS port-channel1 (Ethernet1/7 + Ethernet1/8, trunk vlans 100,200,300, mtu 9000)
+# In a full VRR deployment this switch would be one peer of an MLAG pair.
+# No clag id: clag id is assigned to host-facing bonds on MLAG pairs,
+#   not to uplink bonds.
+net add bond bond1 alias Uplink-LAG
+net add bond bond1 bond slaves swp7,swp8
+net add bond bond1 mtu 9000
+net add bond bond1 bond lacp-rate fast
+net add bond bond1 bond min-links 1
+net add bond bond1 bridge trunk vlans 100,200,300
+net add bridge bridge ports bond1
+
+# --- SVIs with VRR ---
+# "ip address": this switch's unique real IP (differs between the two VRR peers).
+# "ip address-virtual": shared virtual MAC + VIP, identical on both VRR peers.
+#
+# VRR MAC derivation for VRRP migration:
+#   VLAN 100 -> VRRP group 1 -> MAC 00:00:5e:00:01:01
+#   VLAN 200 -> VRRP group 2 -> MAC 00:00:5e:00:01:02
+#
+# NX-OS VRRP group 1 equivalent (VLAN 100):
+#   vrrp 1 / address 192.168.100.254 / priority 110 / preempt
+net add vlan 100 alias Users-VLAN-Interface
+net add vlan 100 ip address 192.168.100.1/24
+net add vlan 100 ip address-virtual 00:00:5e:00:01:01 192.168.100.254/24
+
+# NX-OS VRRP group 2 equivalent (VLAN 200):
+#   vrrp 2 / address 192.168.200.254 / priority 110 / preempt
+net add vlan 200 alias Voice-VLAN-Interface
+net add vlan 200 ip address 192.168.200.1/24
+net add vlan 200 ip address-virtual 00:00:5e:00:01:02 192.168.200.254/24
+
+# VLAN 300 Guest - No VRR (matches NX-OS test2: no VRRP configured on VLAN 300)
+# Note: 192.168.3.1/24 matches the reference config exactly (not a typo).
+net add vlan 300 alias Guest-VLAN-Interface
+net add vlan 300 ip address 192.168.3.1/24
+
+# --- BGP ---
+# NX-OS: router bgp 65100
+net add bgp autonomous-system 65100
+net add bgp router-id 192.168.100.1
+net add bgp neighbor 192.168.100.10 remote-as 65000
+net add bgp neighbor 192.168.100.10 description Distribution-Switch
+net add bgp neighbor 192.168.100.10 ebgp-multihop 2
+
+# --- Static Default Route ---
+# NX-OS: ip route 0.0.0.0/0 192.168.100.254
+net add routing route 0.0.0.0/0 192.168.100.254
+
+# ============================================================================
+# OUT-OF-SCOPE FILE CONFIGS (not configurable via NCLU)
+#
+# /etc/ntp.conf  (NTP prefer flag - not available via NCLU)
+#   server 10.1.1.1 iburst
+#   (No prefer in reference config for this device - matches NCLU output above)
+# ============================================================================

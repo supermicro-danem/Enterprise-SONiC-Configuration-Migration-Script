@@ -1,0 +1,222 @@
+version "21.4R3.12";
+system {
+    host-name QFX-Leaf-Switch-01;
+    root-authentication {
+        encrypted-password "$6$leaf123$def456"; ## SECRET-DATA
+    }
+    name-server {
+        1.1.1.1;
+        1.0.0.1;
+    }
+    syslog {
+        host 10.2.2.1 {
+            any info;
+        }
+        host 10.2.2.2 {
+            any info;
+        }
+    }
+    ntp {
+        server 10.1.1.1;
+        server 10.1.1.2;
+    }
+    radius-server {
+        10.3.3.1 {
+            secret "$9$radiuskey123"; ## SECRET-DATA
+            timeout 10;
+            retry-count 3;
+        }
+    }
+    authentication-order [ radius password ];
+}
+chassis {
+    aggregated-devices {
+        ethernet {
+            device-count 11;
+        }
+    }
+}
+interfaces {
+    xe-0/0/0 {
+        description "Uplink-to-Spine-01";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Management Servers Storage DMZ ];
+                }
+            }
+        }
+    }
+    xe-0/0/1 {
+        description "Uplink-to-Spine-02";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Management Servers Storage DMZ ];
+                }
+            }
+        }
+    }
+    xe-0/0/2 {
+        description "Server-Farm-01";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Servers;
+                }
+            }
+        }
+    }
+    xe-0/0/3 {
+        description "Server-Farm-02";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Servers;
+                }
+            }
+        }
+    }
+    xe-0/0/4 {
+        description "Storage-Array-01";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Storage;
+                }
+            }
+        }
+    }
+    xe-0/0/5 {
+        description "Storage-Array-02";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Storage;
+                }
+            }
+        }
+    }
+    ae10 {
+        description "Uplink-LAG-to-Spine";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Management Servers Storage DMZ ];
+                }
+            }
+        }
+    }
+    xe-0/0/6 {
+        description "Port-Channel-10-Member-01";
+        ether-options {
+            802.3ad ae10;
+        }
+    }
+    xe-0/0/7 {
+        description "Port-Channel-10-Member-02";
+        ether-options {
+            802.3ad ae10;
+        }
+    }
+    vlan {
+        unit 10 {
+            description "Management-VLAN-Interface";
+            family inet {
+                address 192.168.10.1/24;
+            }
+        }
+        unit 20 {
+            description "Server-VLAN-Interface";
+            family inet {
+                address 192.168.20.1/24;
+            }
+        }
+        unit 30 {
+            description "Storage-VLAN-Interface";
+            family inet {
+                address 192.168.30.1/24;
+            }
+        }
+        unit 40 {
+            description "DMZ-VLAN-Interface";
+            family inet {
+                address 192.168.40.1/24;
+            }
+        }
+    }
+    lo0 {
+        unit 0 {
+            description "Router-ID-Loopback";
+            family inet {
+                address 10.0.0.1/32;
+            }
+        }
+    }
+}
+vlans {
+    Management {
+        vlan-id 10;
+        description "Management network VLAN";
+    }
+    Servers {
+        vlan-id 20;
+        description "Server network VLAN";
+    }
+    Storage {
+        vlan-id 30;
+        description "Storage network VLAN";
+    }
+    DMZ {
+        vlan-id 40;
+        description "DMZ network VLAN";
+    }
+}
+protocols {
+    bgp {
+        group spine-peers {
+            type external;
+            local-address 10.0.0.1;
+            neighbor 10.10.10.1 {
+                peer-as 65001;
+                description "Spine-01";
+            }
+            neighbor 10.10.10.2 {
+                peer-as 65001;
+                description "Spine-02";
+                multihop {
+                    ttl 5;
+                }
+            }
+        }
+    }
+    mc-lag {
+        icp {
+            peer-address 192.168.10.2;
+            peer-id 2;
+        }
+        chassis-id 1;
+        interface ae10 {
+            mc-ae-id 10;
+        }
+    }
+}
+routing-options {
+    autonomous-system 65010;
+    static {
+        route 0.0.0.0/0 next-hop 192.168.10.254;
+    }
+    router-id 10.0.0.1;
+}

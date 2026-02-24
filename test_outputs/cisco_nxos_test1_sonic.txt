@@ -1,0 +1,205 @@
+! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.
+! You can then copy/paste the configuration commands below in sections.
+sonic-cli
+!
+configure terminal
+!
+hostname DC-Edge-Switch-01
+interface-naming standard
+write memory
+!
+exit
+!
+! Exit sonic-cli and re-enter to apply interface-naming standard changes.
+sonic-cli
+!
+configure terminal
+!
+spanning-tree enable
+!
+ip vrf mgmt
+interface Management 0
+ip address 192.168.200.254/24 gwaddr 192.168.200.2
+exit
+!
+username admin password testpass123 role admin
+username operator password testpass123 role network-operator
+username guest password testpass123 role network-operator
+!
+interface PortChannel 10 mode active
+  mtu 9000
+  description "VPC-Peer-Link"
+  switchport trunk allowed vlan 1-4094
+exit
+interface PortChannel 20 mode active
+  mtu 9000
+  description "Uplink-LAG-to-Core"
+  switchport trunk allowed vlan 10,20,30,40
+  mclag 10
+exit
+interface PortChannel 30 mode active
+  mtu 1500
+  description "Server-Farm-LAG"
+  switchport access vlan 20
+exit
+!
+mclag domain 10
+peer-link PortChannel 10
+source-ip 192.168.200.254
+peer-ip 192.168.200.3
+!
+logging server 10.2.2.1
+!
+logging server 10.2.2.2
+!
+ntp server 10.1.1.1 prefer
+!
+ntp server 10.1.1.2
+!
+! DNS server configuration (Enterprise SONiC 5.18)
+ip name-server source-interface Management 0
+ip name-server 1.1.1.1
+ip name-server 1.0.0.1
+!
+radius-server host 10.3.3.1 key testkey123 retransmit 2 timeout 5
+!
+aaa authentication login default group radius local
+aaa authentication login console local
+!
+snmp-server community public ro
+!
+snmp-server community private rw
+!
+interface vlan 1
+  description "default"
+exit
+interface vlan 10
+  description "Management network VLAN"
+  ip address 192.168.10.1/24
+exit
+interface vlan 20
+  description "Server network VLAN"
+  ip address 192.168.20.1/24
+exit
+interface vlan 30
+  description "Storage network VLAN"
+  mtu 9000
+  ip address 192.168.30.1/24
+exit
+interface vlan 40
+  description "DMZ network VLAN"
+  ip address 192.168.40.1/24
+exit
+!
+interface Eth 1/1
+  mtu 9000
+  speed 10000
+  description "Uplink-to-Core-01"
+  switchport trunk allowed vlan 10,20,30,40
+  no shutdown
+exit
+interface Eth 1/2
+  mtu 9000
+  speed 10000
+  description "Uplink-to-Core-02"
+  switchport trunk allowed vlan 10,20,30,40
+  no shutdown
+exit
+interface Eth 1/3
+  mtu 1500
+  speed 1000
+  description "Server-Farm-01"
+  switchport access vlan 20
+  no shutdown
+exit
+interface Eth 1/4
+  mtu 1500
+  speed 1000
+  description "Server-Farm-02"
+  switchport access vlan 20
+  no shutdown
+exit
+interface Eth 1/5
+  mtu 9000
+  speed 10000
+  description "Storage-Array-01"
+  switchport access vlan 30
+  no shutdown
+exit
+interface Eth 1/6
+  mtu 9000
+  speed 10000
+  description "Storage-Array-02"
+  switchport access vlan 30
+  no shutdown
+exit
+interface Eth 1/7
+  mtu 1500
+  speed 1000
+  description "DMZ-Server-01"
+  switchport access vlan 40
+  no shutdown
+exit
+interface Eth 1/8
+  mtu 1500
+  speed 1000
+  description "DMZ-Server-02"
+  switchport access vlan 40
+  no shutdown
+exit
+interface Eth 1/9
+  description "Port-Channel-10-Member-01-Peer-Link"
+  channel-group 10
+  no shutdown
+exit
+interface Eth 1/10
+  description "Port-Channel-10-Member-02-Peer-Link"
+  channel-group 10
+  no shutdown
+exit
+interface Eth 1/11
+  description "Port-Channel-20-Member-01-Uplink"
+  channel-group 20
+  no shutdown
+exit
+interface Eth 1/12
+  description "Port-Channel-20-Member-02-Uplink"
+  channel-group 20
+  no shutdown
+exit
+interface Eth 1/13
+  description "Port-Channel-30-Member-01"
+  channel-group 30
+  no shutdown
+exit
+interface Eth 1/14
+  description "Port-Channel-30-Member-02"
+  channel-group 30
+  no shutdown
+exit
+!
+interface Loopback0
+  description "Router-ID-Loopback"
+  ip address 10.0.0.1/32
+exit
+!
+ip route 0.0.0.0/0 192.168.10.254
+!
+router bgp 65010
+ router-id 10.0.0.1
+ address-family ipv4 unicast
+  redistribute direct route-map DIRECT-TO-BGP
+ exit
+ neighbor 10.10.10.1
+  remote-as 65001
+  description "Core-Router-01"
+  update-source loopback0
+ neighbor 10.10.10.2
+  remote-as 65001
+  description "Core-Router-02"
+  update-source loopback0
+  ebgp-multihop 5
+exit
+!
+end
+write memory

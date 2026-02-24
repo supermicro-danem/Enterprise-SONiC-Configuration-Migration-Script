@@ -1,0 +1,139 @@
+! Arista EOS Test Configuration 3 - Data Center Spine Switch
+! device: DC-Spine-Switch-01
+!
+!Command: show running-config
+!Time: Mon Feb 12 16:00:00 2024
+!
+hostname DC-Spine-Switch-01
+
+service routing protocols model multi-agent
+
+username admin privilege 15 role network-admin secret sha512 $6$spine456$abc789
+username operator privilege 1 role network-operator secret sha512 $6$op789$def012
+
+ip name-server vrf default 8.8.8.8
+ip name-server vrf default 8.8.4.4
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1 prefer
+ntp server 10.1.1.2
+
+logging host 10.2.2.1
+logging host 10.2.2.2
+
+aaa authentication login default group radius local
+aaa authentication login console local
+
+radius-server host 10.3.3.1 key 7 "radiuskey456" timeout 10 retransmit 3
+
+vlan 1
+   name default
+
+vlan 1000
+   name Infrastructure
+   description Infrastructure VLAN
+
+vlan 2000
+   name Services
+   description Services VLAN
+
+interface Ethernet1
+   description Leaf-01-Uplink
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   mtu 9000
+   speed forced 25G
+   no shutdown
+
+interface Ethernet2
+   description Leaf-02-Uplink
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   mtu 9000
+   speed forced 25G
+   no shutdown
+
+interface Ethernet3
+   description Leaf-03-Uplink
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   mtu 9000
+   speed forced 25G
+   no shutdown
+
+interface Ethernet4
+   description Leaf-04-Uplink
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   mtu 9000
+   speed forced 25G
+   no shutdown
+
+interface Port-Channel100
+   description Spine-to-Spine-LAG
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   mtu 9000
+
+interface Ethernet5
+   description Port-Channel-100-Member-01
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   channel-group 100 mode active
+   no shutdown
+
+interface Ethernet6
+   description Port-Channel-100-Member-02
+   switchport mode trunk
+   switchport trunk allowed vlan 1000,2000
+   channel-group 100 mode active
+   no shutdown
+
+interface Vlan1000
+   description Infrastructure-VLAN-Interface
+   ip address 10.0.10.1/24
+   no shutdown
+
+interface Vlan2000
+   description Services-VLAN-Interface
+   ip address 10.0.1.1/24
+   no shutdown
+
+interface Loopback0
+   ip address 10.0.0.1/32
+   description Router-ID-Loopback
+
+interface Loopback1
+   ip address 10.0.0.2/32
+   description Management-Loopback
+
+router bgp 65000
+   router-id 10.0.0.1
+   neighbor 10.0.0.10 remote-as 65001
+      description Spine-02
+      update-source Loopback0
+      ebgp-multihop 3
+   neighbor 10.0.0.20 remote-as 65002
+      description Leaf-01
+      update-source Loopback0
+      ebgp-multihop 2
+   neighbor 10.0.0.21 remote-as 65002
+      description Leaf-02
+      update-source Loopback0
+      ebgp-multihop 2
+   neighbor 10.0.0.22 remote-as 65002
+      description Leaf-03
+      update-source Loopback0
+      ebgp-multihop 2
+   neighbor 10.0.0.23 remote-as 65002
+      description Leaf-04
+      update-source Loopback0
+      ebgp-multihop 2
+   redistribute connected
+   redistribute static
+
+ip route 0.0.0.0/0 10.0.0.254
+ip route 172.16.0.0/16 10.0.0.20
+ip route 172.17.0.0/16 10.0.0.21

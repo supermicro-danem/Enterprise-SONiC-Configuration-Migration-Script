@@ -1,0 +1,177 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/juniper_qfx_test2.txt
+Output file: test_outputs\juniper_qfx_test2_sonic.txt
+Hostname: QFX-Access-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 3
+Physical Interfaces: 8
+Port-Channels: 1
+Loopback Interfaces: 0
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - system (line 2) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - host-name QFX-Access-Switch-01 (line 3) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - root-authentication (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - root-authentication (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+root-authentication
+  - encrypted-password "$6$access123$xyz789"; ## SECRET-DATA (line 5) - Configuration not translated; configure manually on SONiC if needed.
+
+root-authentication
+  - encrypted-password "$6$access123$xyz789"; ## SECRET-DATA (line 5) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - name-server (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+name-server
+  - 8.8.8.8 (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - syslog (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - syslog (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+syslog
+  - host 10.2.2.1 (line 11) - Configuration not translated; configure manually on SONiC if needed.
+
+host 10.2.2.1
+  - any info (line 12) - Configuration not translated; configure manually on SONiC if needed.
+
+host 10.2.2.1
+  - any info (line 12) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - ntp (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - ntp (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+ntp
+  - server 10.1.1.1 (line 16) - Configuration not translated; configure manually on SONiC if needed.
+
+  - chassis (line 19) - Configuration not translated; configure manually on SONiC if needed.
+
+chassis
+  - aggregated-devices (line 20) - Configuration not translated; configure manually on SONiC if needed.
+
+aggregated-devices
+  - ethernet (line 21) - Configuration not translated; configure manually on SONiC if needed.
+
+ethernet
+  - device-count 8 (line 22) - Configuration not translated; configure manually on SONiC if needed.
+
+  - interfaces (line 26) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/0
+  - unit 0 (line 29) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 30) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/1
+  - unit 0 (line 40) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 41) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/2
+  - unit 0 (line 51) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 52) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/3
+  - unit 0 (line 62) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 63) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/4
+  - unit 0 (line 73) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 74) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/5
+  - unit 0 (line 84) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 85) - Configuration not translated; configure manually on SONiC if needed.
+
+ae1
+  - aggregated-ether-options (line 95) - Configuration not translated; configure manually on SONiC if needed.
+
+aggregated-ether-options
+  - lacp (line 96) - Configuration not translated; configure manually on SONiC if needed.
+
+lacp
+  - active (line 97) - Configuration not translated; configure manually on SONiC if needed.
+
+ae1
+  - unit 0 (line 100) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 101) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/6
+  - ether-options (line 111) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/7
+  - ether-options (line 117) - Configuration not translated; configure manually on SONiC if needed.
+
+  - vlans (line 142) - Configuration not translated; configure manually on SONiC if needed.
+
+  - protocols (line 156) - Configuration not translated; configure manually on SONiC if needed.
+
+protocols
+  - bgp (line 157) - Configuration not translated; configure manually on SONiC if needed.
+
+bgp
+  - group distribution-peer (line 158) - Configuration not translated; configure manually on SONiC if needed.
+
+group distribution-peer
+  - type external (line 159) - Configuration not translated; configure manually on SONiC if needed.
+
+group distribution-peer
+  - neighbor 192.168.100.10 (line 160) - Configuration not translated; configure manually on SONiC if needed.
+
+neighbor 192.168.100.10
+  - peer-as 65000 (line 161) - Configuration not translated; configure manually on SONiC if needed.
+
+protocols
+  - vrrp (line 169) - Configuration not translated; configure manually on SONiC if needed.
+
+vrrp
+  - group vrrp-group-1 (line 170) - Configuration not translated; configure manually on SONiC if needed.
+
+vrrp
+  - group vrrp-group-2 (line 176) - Configuration not translated; configure manually on SONiC if needed.
+
+  - routing-options (line 184) - Configuration not translated; configure manually on SONiC if needed.
+
+routing-options
+  - static (line 186) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

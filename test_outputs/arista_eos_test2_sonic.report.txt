@@ -1,0 +1,18 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/arista_eos_test2.txt
+Output file: test_outputs\arista_eos_test2_sonic.txt
+Hostname: Campus-Access-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 8
+Port-Channels: 1
+Loopback Interfaces: 0
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: False
+
+======================================================================

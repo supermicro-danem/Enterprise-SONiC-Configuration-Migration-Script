@@ -1,0 +1,198 @@
+! Arista EOS Test Configuration 1 - Data Center Leaf Switch
+! device: DC-Leaf-Switch-01
+!
+!Command: show running-config
+!Time: Mon Feb 12 14:30:00 2024
+!
+hostname DC-Leaf-Switch-01
+
+service routing protocols model multi-agent
+
+username admin privilege 15 role network-admin secret sha512 $6$admin456$def789
+username operator privilege 1 role network-operator secret sha512 $6$op456$ghi012
+
+ip name-server vrf default 1.1.1.1
+ip name-server vrf default 1.0.0.1
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1 prefer
+ntp server 10.1.1.2
+
+logging host 10.2.2.1
+logging host 10.2.2.2
+
+aaa authentication login default group radius local
+aaa authentication login console local
+
+radius-server host 10.3.3.1 key 7 "radiuskey123" timeout 10 retransmit 3
+
+vlan 1
+   name default
+
+vlan 10
+   name Management
+   description Management network VLAN
+
+vlan 20
+   name Servers
+   description Server network VLAN
+
+vlan 30
+   name Storage
+   description Storage network VLAN
+
+vlan 40
+   name DMZ
+   description DMZ network VLAN
+
+interface Ethernet1
+   description Uplink-to-Spine-01
+   switchport mode trunk
+   switchport trunk allowed vlan 10,20,30,40
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet2
+   description Uplink-to-Spine-02
+   switchport mode trunk
+   switchport trunk allowed vlan 10,20,30,40
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet3
+   description Server-Farm-01
+   switchport mode access
+   switchport access vlan 20
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet4
+   description Server-Farm-02
+   switchport mode access
+   switchport access vlan 20
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet5
+   description Storage-Array-01
+   switchport mode access
+   switchport access vlan 30
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet6
+   description Storage-Array-02
+   switchport mode access
+   switchport access vlan 30
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet7
+   description DMZ-Server-01
+   switchport mode access
+   switchport access vlan 40
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet8
+   description DMZ-Server-02
+   switchport mode access
+   switchport access vlan 40
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Port-Channel10
+   description MLAG-Peer-Link
+   switchport mode trunk
+   switchport trunk allowed vlan 1-4094
+   mtu 9000
+
+interface Port-Channel20
+   description Server-Farm-LAG
+   switchport mode access
+   switchport access vlan 20
+   mtu 1500
+
+interface Ethernet9
+   description Port-Channel-10-Member-01-Peer-Link
+   switchport mode trunk
+   switchport trunk allowed vlan 1-4094
+   channel-group 10 mode active
+   no shutdown
+
+interface Ethernet10
+   description Port-Channel-10-Member-02-Peer-Link
+   switchport mode trunk
+   switchport trunk allowed vlan 1-4094
+   channel-group 10 mode active
+   no shutdown
+
+interface Ethernet11
+   description Port-Channel-20-Member-01
+   switchport mode access
+   switchport access vlan 20
+   channel-group 20 mode active
+   no shutdown
+
+interface Ethernet12
+   description Port-Channel-20-Member-02
+   switchport mode access
+   switchport access vlan 20
+   channel-group 20 mode active
+   no shutdown
+
+interface Vlan10
+   description Management-VLAN-Interface
+   ip address 192.168.10.1/24
+   no shutdown
+
+interface Vlan20
+   description Server-VLAN-Interface
+   ip address 192.168.20.1/24
+   no shutdown
+
+interface Vlan30
+   description Storage-VLAN-Interface
+   ip address 192.168.30.1/24
+   mtu 9000
+   no shutdown
+
+interface Vlan40
+   description DMZ-VLAN-Interface
+   ip address 192.168.40.1/24
+   no shutdown
+
+interface Loopback0
+   ip address 10.0.0.1/32
+   description Router-ID-Loopback
+
+mlag configuration
+   domain-id 10
+   local-interface Vlan10
+   peer-address 192.168.10.2
+   peer-link Port-Channel10
+   system-mac 00:11:22:33:44:55
+
+router bgp 65010
+   router-id 10.0.0.1
+   neighbor 10.10.10.1 remote-as 65001
+      description Spine-01
+      update-source Loopback0
+      ebgp-multihop 5
+   neighbor 10.10.10.2 remote-as 65001
+      description Spine-02
+      update-source Loopback0
+      ebgp-multihop 5
+   redistribute connected
+
+ip route 0.0.0.0/0 192.168.10.254

@@ -1,0 +1,140 @@
+! Cisco NX-OS Test Configuration 2 - Access Switch with VRRP
+!Command: show running-config
+!Time: Mon Feb 12 15:00:00 2024
+version 9.3(5)
+hostname Access-Switch-01
+
+feature telnet
+feature ssh
+feature bgp
+feature vrrp
+feature lldp
+
+username admin password 5 $1$admin123 role network-admin
+
+ip domain-lookup
+ip name-server 8.8.8.8
+
+snmp-server community public ro
+
+ntp server 10.1.1.1
+
+logging server 10.2.2.1
+
+vlan 1
+  name default
+
+vlan 100
+  name Users
+  description User access VLAN
+
+vlan 200
+  name Voice
+  description Voice VLAN
+
+vlan 300
+  name Guest
+  description Guest network VLAN
+
+interface Ethernet1/1
+  description Access-Port-01
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/2
+  description Access-Port-02
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/3
+  description Voice-Port-01
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  switchport trunk native vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/4
+  description Voice-Port-02
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  switchport trunk native vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/5
+  description Guest-Port-01
+  switchport mode access
+  switchport access vlan 300
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/6
+  description Uplink-to-Distribution
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200,300
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface port-channel1
+  description Uplink-LAG
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200,300
+  mtu 9000
+
+interface Ethernet1/7
+  description Port-Channel-1-Member-01
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200,300
+  channel-group 1 mode active
+  no shutdown
+
+interface Ethernet1/8
+  description Port-Channel-1-Member-02
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200,300
+  channel-group 1 mode active
+  no shutdown
+
+interface vlan 100
+  description Users-VLAN-Interface
+  ip address 192.168.100.1 255.255.255.0
+  vrrp 1
+    address 192.168.100.254
+    priority 110
+    preempt
+  no shutdown
+
+interface vlan 200
+  description Voice-VLAN-Interface
+  ip address 192.168.200.1 255.255.255.0
+  vrrp 2
+    address 192.168.200.254
+    priority 110
+    preempt
+  no shutdown
+
+interface vlan 300
+  description Guest-VLAN-Interface
+  ip address 192.168.3.1 255.255.255.0
+  no shutdown
+
+router bgp 65100
+  router-id 192.168.100.1
+  address-family ipv4 unicast
+  neighbor 192.168.100.10
+    remote-as 65000
+    description Distribution-Switch
+    ebgp-multihop 2
+
+ip route 0.0.0.0/0 192.168.100.254

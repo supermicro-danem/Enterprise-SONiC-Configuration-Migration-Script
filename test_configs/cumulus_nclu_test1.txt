@@ -1,0 +1,241 @@
+# Cumulus Linux NCLU Configuration - Data Center Leaf Switch with MLAG
+# Device: DC-Leaf-Cumulus-01
+# Cumulus Linux Version: 4.5.x
+# Format: net show configuration commands output
+#         (copy/paste into IS-CLI or apply with: sudo net commit)
+#
+# Source configs translated:
+#   arista_eos_test1.txt   (DC-Leaf-Switch-01)
+#   cisco_nxos_test1.txt   (DC-Edge-Switch-01)
+#
+# Translation map:
+#   EOS MLAG / NX-OS vPC               -> Cumulus MLAG (clagd on peerlink.4094)
+#   EOS Port-Channel10 (peer link)      -> peerlink bond (swp9 + swp10)
+#   EOS Port-Channel20 (server LAG)     -> bond20 with clag id 20 (swp11 + swp12)
+#   EOS/NX-OS trunk ports               -> bridge trunk vlans
+#   EOS/NX-OS access ports              -> bridge access <vlan>
+#   EOS/NX-OS interface vlan SVIs       -> net add vlan <id> ip address
+#   EOS/NX-OS BGP AS 65010             -> net add bgp autonomous-system 65010
+#
+# OUT OF SCOPE FOR NCLU - requires direct file edits:
+#   RADIUS management authentication    -> /etc/pam_radius_auth.conf
+#   AAA login order (radius then local) -> /etc/nsswitch.conf + /etc/pam.d/
+#   NTP server prefer keyword           -> /etc/ntp.conf (not available in NCLU)
+#   See file-config reference notes at bottom of this file.
+#
+# DESIGN NOTE - LACP rate:
+#   EOS channel-group mode active / NX-OS channel-group mode active both
+#   default to slow LACP (30-second PDUs). Cumulus bond lacp-rate fast uses
+#   1-second PDUs. Fast LACP is the Cumulus recommended practice for DC/MLAG
+#   environments (faster failure detection). Use "bond lacp-rate slow" to
+#   match the reference configs' implicit default exactly.
+# ============================================================================
+
+# --- System ---
+net add hostname DC-Leaf-Cumulus-01
+
+# --- Loopback ---
+# EOS: interface Loopback0 / ip address 10.0.0.1/32
+# NX-OS: interface loopback0 / ip address 10.0.0.1 255.255.255.255
+net add loopback lo ip address 10.0.0.1/32
+
+# --- DNS ---
+# EOS: ip name-server vrf default 1.1.1.1
+# NX-OS: ip name-server 1.1.1.1
+net add dns nameserver ipv4 1.1.1.1
+net add dns nameserver ipv4 1.0.0.1
+
+# --- NTP ---
+# EOS: ntp server 10.1.1.1 prefer | NX-OS: ntp server 10.1.1.1 prefer
+# NOTE: "prefer" keyword is not available via NCLU.
+# To set a preferred NTP server, add "prefer" directly in /etc/ntp.conf:
+#   server 10.1.1.1 iburst prefer
+#   server 10.1.1.2 iburst
+net add time ntp server 10.1.1.1 iburst
+net add time ntp server 10.1.1.2 iburst
+
+# --- Syslog ---
+# EOS: logging host 10.2.2.1 | NX-OS: logging server 10.2.2.1 6
+net add syslog host ipv4 10.2.2.1 port udp 514
+net add syslog host ipv4 10.2.2.2 port udp 514
+
+# --- SNMP ---
+# EOS/NX-OS: snmp-server community public ro / private rw
+net add snmp-server listening-address all
+net add snmp-server readonly-community public access any
+net add snmp-server readwrite-community private access any
+
+# --- Bridge (VLAN-aware mode) ---
+# Single VLAN-aware bridge carries all VLANs.
+# Equivalent to the global VLAN database in NX-OS and EOS.
+# bridge-pvid 1: default native VLAN for ports without an explicit pvid.
+# vids 10,20,30,40: global set of VLANs allowed on the bridge, matching
+#   EOS/NX-OS "vlan 10 / vlan 20 / vlan 30 / vlan 40" definitions.
+net add bridge bridge vlan-aware
+net add bridge bridge vids 10,20,30,40
+net add bridge bridge pvid 1
+
+# --- Uplink Trunk Ports to Spines ---
+# EOS Ethernet1: Uplink-to-Spine-01, trunk vlan 10,20,30,40, mtu 9000, 10G
+# NX-OS Ethernet1/1: same
+net add interface swp1 alias Uplink-to-Spine-01
+net add interface swp1 mtu 9000
+net add interface swp1 link speed 10000
+net add interface swp1 bridge trunk vlans 10,20,30,40
+net add bridge bridge ports swp1
+
+# EOS Ethernet2: Uplink-to-Spine-02, trunk vlan 10,20,30,40, mtu 9000, 10G
+# NX-OS Ethernet1/2: same
+net add interface swp2 alias Uplink-to-Spine-02
+net add interface swp2 mtu 9000
+net add interface swp2 link speed 10000
+net add interface swp2 bridge trunk vlans 10,20,30,40
+net add bridge bridge ports swp2
+
+# --- Server Farm Access Ports (VLAN 20) ---
+# EOS Ethernet3: Server-Farm-01, access vlan 20, mtu 1500, 1G
+# NX-OS Ethernet1/3: same
+net add interface swp3 alias Server-Farm-01
+net add interface swp3 mtu 1500
+net add interface swp3 link speed 1000
+net add interface swp3 bridge access 20
+net add bridge bridge ports swp3
+
+# EOS Ethernet4: Server-Farm-02, access vlan 20, mtu 1500, 1G
+# NX-OS Ethernet1/4: same
+net add interface swp4 alias Server-Farm-02
+net add interface swp4 mtu 1500
+net add interface swp4 link speed 1000
+net add interface swp4 bridge access 20
+net add bridge bridge ports swp4
+
+# --- Storage Access Ports (VLAN 30) ---
+# EOS Ethernet5: Storage-Array-01, access vlan 30, mtu 9000, 10G
+# NX-OS Ethernet1/5: same
+net add interface swp5 alias Storage-Array-01
+net add interface swp5 mtu 9000
+net add interface swp5 link speed 10000
+net add interface swp5 bridge access 30
+net add bridge bridge ports swp5
+
+# EOS Ethernet6: Storage-Array-02, access vlan 30, mtu 9000, 10G
+# NX-OS Ethernet1/6: same
+net add interface swp6 alias Storage-Array-02
+net add interface swp6 mtu 9000
+net add interface swp6 link speed 10000
+net add interface swp6 bridge access 30
+net add bridge bridge ports swp6
+
+# --- DMZ Access Ports (VLAN 40) ---
+# EOS Ethernet7: DMZ-Server-01, access vlan 40, mtu 1500, 1G
+# NX-OS Ethernet1/7: same
+net add interface swp7 alias DMZ-Server-01
+net add interface swp7 mtu 1500
+net add interface swp7 link speed 1000
+net add interface swp7 bridge access 40
+net add bridge bridge ports swp7
+
+# EOS Ethernet8: DMZ-Server-02, access vlan 40, mtu 1500, 1G
+# NX-OS Ethernet1/8: same
+net add interface swp8 alias DMZ-Server-02
+net add interface swp8 mtu 1500
+net add interface swp8 link speed 1000
+net add interface swp8 bridge access 40
+net add bridge bridge ports swp8
+
+# --- MLAG Peer Link Bond ---
+# EOS Port-Channel10 (Ethernet9 + Ethernet10, trunk all vlans, mtu 9000)
+# NX-OS port-channel10 vpc peer-link (Ethernet1/9 + Ethernet1/10)
+# "peerlink" is a reserved bond name required by clagd. The bond itself
+# carries all VLANs automatically; clagd programs this via peerlink.4094.
+net add bond peerlink bond slaves swp9,swp10
+net add bond peerlink mtu 9000
+net add bond peerlink bond lacp-rate fast
+net add bond peerlink bond min-links 1
+net add bridge bridge ports peerlink
+
+# --- MLAG Control Plane (peerlink.4094) ---
+# clag peer-ip linklocal: auto link-local address on peerlink (CL 4.x+).
+# clag backup-ip: in-band fallback path using peer's VLAN 10 SVI address.
+#   Matches EOS "peer-address 192.168.10.2".
+#   NOTE: Production best practice is to use the peer's OOB eth0 IP here
+#   so the MLAG control plane survives a complete front-panel failure.
+# clag sys-mac: shared virtual MAC; must be identical on both peers.
+#   Matches EOS "system-mac 00:11:22:33:44:55".
+# clag priority: lower value wins primary role. 100 = default primary.
+#   NX-OS equivalent: vpc domain role priority 100
+net add interface peerlink.4094 clag backup-ip 192.168.10.2
+net add interface peerlink.4094 clag peer-ip linklocal
+net add interface peerlink.4094 clag priority 100
+net add interface peerlink.4094 clag sys-mac 00:11:22:33:44:55
+
+# --- Server Farm Dual-Homed LAG Bond (MLAG) ---
+# EOS Port-Channel20 (Ethernet11 + Ethernet12, access vlan 20, mtu 1500)
+# NX-OS port-channel30 vpc 10 (Ethernet1/13 + Ethernet1/14, access vlan 20)
+# clag id 20: must be identical on both MLAG peers; unique per bond pair.
+#   This is what links the bond on this switch to its counterpart on the peer.
+net add bond bond20 alias Server-Farm-LAG
+net add bond bond20 bond slaves swp11,swp12
+net add bond bond20 mtu 1500
+net add bond bond20 bond lacp-rate fast
+net add bond bond20 bond min-links 1
+net add bond bond20 clag id 20
+net add bond bond20 bridge access 20
+net add bridge bridge ports bond20
+
+# --- SVIs (Switched Virtual Interfaces) ---
+# EOS: interface Vlan<N> / NX-OS: interface vlan <N>
+
+# VLAN 10 Management
+net add vlan 10 alias Management-VLAN-Interface
+net add vlan 10 ip address 192.168.10.1/24
+
+# VLAN 20 Servers
+net add vlan 20 alias Server-VLAN-Interface
+net add vlan 20 ip address 192.168.20.1/24
+
+# VLAN 30 Storage (mtu 9000 matches EOS/NX-OS storage SVI)
+net add vlan 30 alias Storage-VLAN-Interface
+net add vlan 30 ip address 192.168.30.1/24
+net add vlan 30 mtu 9000
+
+# VLAN 40 DMZ
+net add vlan 40 alias DMZ-VLAN-Interface
+net add vlan 40 ip address 192.168.40.1/24
+
+# --- BGP ---
+# EOS: router bgp 65010 / NX-OS: router bgp 65010
+# update-source lo: use loopback for BGP source (EOS: update-source Loopback0)
+net add bgp autonomous-system 65010
+net add bgp router-id 10.0.0.1
+net add bgp neighbor 10.10.10.1 remote-as 65001
+net add bgp neighbor 10.10.10.1 description Spine-01
+net add bgp neighbor 10.10.10.1 update-source lo
+net add bgp neighbor 10.10.10.1 ebgp-multihop 5
+net add bgp neighbor 10.10.10.2 remote-as 65001
+net add bgp neighbor 10.10.10.2 description Spine-02
+net add bgp neighbor 10.10.10.2 update-source lo
+net add bgp neighbor 10.10.10.2 ebgp-multihop 5
+net add bgp ipv4 unicast redistribute connected
+
+# --- Static Default Route ---
+# EOS/NX-OS: ip route 0.0.0.0/0 192.168.10.254
+net add routing route 0.0.0.0/0 192.168.10.254
+
+# ============================================================================
+# OUT-OF-SCOPE FILE CONFIGS (not configurable via NCLU)
+# These must be applied directly to the switch filesystem.
+#
+# /etc/pam_radius_auth.conf
+#   (RADIUS for management auth - EOS: radius-server / NX-OS: radius-server)
+#   10.3.3.1    radiuskey123    10    3
+#   Format: <server>  <secret>  <timeout_sec>  <retries>
+#   Retries value 3 matches EOS "retransmit 3" / NX-OS "retransmit 2" (EOS used)
+#
+# /etc/nsswitch.conf  (AAA login order - EOS: aaa authentication login default)
+#   passwd: compat radius   <- RADIUS first, then local fallback
+#
+# /etc/ntp.conf  (NTP prefer flag - not available via NCLU)
+#   server 10.1.1.1 iburst prefer
+#   server 10.1.1.2 iburst
+# ============================================================================

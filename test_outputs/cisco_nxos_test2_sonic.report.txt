@@ -1,0 +1,110 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cisco_nxos_test2.txt
+Output file: test_outputs\cisco_nxos_test2_sonic.txt
+Hostname: Access-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 8
+Port-Channels: 1
+Loopback Interfaces: 0
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - version 9.3(5) (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature telnet (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ssh (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature bgp (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature vrrp (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature lldp (line 11) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip domain-lookup (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+vlan 1
+  - vlan 1 (line 24) - Configuration not translated; configure manually on SONiC if needed.
+
+vlan 100
+  - vlan 100 (line 27) - Configuration not translated; configure manually on SONiC if needed.
+
+vlan 200
+  - vlan 200 (line 31) - Configuration not translated; configure manually on SONiC if needed.
+
+vlan 300
+  - vlan 300 (line 35) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/1
+  - interface Ethernet1/1 (line 39) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/2
+  - interface Ethernet1/2 (line 47) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/3
+  - interface Ethernet1/3 (line 55) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/4
+  - interface Ethernet1/4 (line 64) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/5
+  - interface Ethernet1/5 (line 73) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/6
+  - interface Ethernet1/6 (line 81) - Configuration not translated; configure manually on SONiC if needed.
+
+interface port-channel 1
+  - interface port-channel1 (line 89) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/7
+  - interface Ethernet1/7 (line 95) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/8
+  - interface Ethernet1/8 (line 102) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 100
+  - interface vlan 100 (line 109) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 100
+  - description Users-VLAN-Interface (line 110) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 100
+  - no shutdown (line 116) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 200
+  - interface vlan 200 (line 118) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 200
+  - description Voice-VLAN-Interface (line 119) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 200
+  - no shutdown (line 125) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 300
+  - interface vlan 300 (line 127) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 300
+  - description Guest-VLAN-Interface (line 128) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 300
+  - no shutdown (line 130) - Configuration not translated; configure manually on SONiC if needed.
+
+router bgp 65100
+  - router bgp 65100 (line 132) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

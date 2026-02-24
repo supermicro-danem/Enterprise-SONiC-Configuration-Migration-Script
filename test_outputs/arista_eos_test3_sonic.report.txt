@@ -1,0 +1,18 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/arista_eos_test3.txt
+Output file: test_outputs\arista_eos_test3_sonic.txt
+Hostname: DC-Spine-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 3
+Physical Interfaces: 6
+Port-Channels: 1
+Loopback Interfaces: 2
+Static Routes: 3
+BGP Configured: True
+MCLAG Configured: False
+
+======================================================================

@@ -1,0 +1,18 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cumulus_nclu_test3.txt
+Output file: test_outputs\cumulus_nclu_test3_sonic.txt
+Hostname: DC-Access-VRR-Cumulus-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 3
+Physical Interfaces: 8
+Port-Channels: 1
+Loopback Interfaces: 1
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: False
+
+======================================================================

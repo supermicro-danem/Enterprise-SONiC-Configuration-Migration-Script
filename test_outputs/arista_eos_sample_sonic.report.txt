@@ -1,0 +1,30 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/arista_eos_sample.txt
+Output file: test_outputs\arista_eos_sample_sonic.txt
+Hostname: Arista-EOS-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 8
+Port-Channels: 5
+Loopback Interfaces: 1
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: True
+
+Unsupported Features:
+==================================================
+
+line vty
+  - session-limit 10 (line 216) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

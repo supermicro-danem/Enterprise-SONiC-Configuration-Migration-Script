@@ -1,0 +1,216 @@
+! device: Arista-EOS-Switch-01
+!
+!Command: show running-config
+!Time: Mon Jan 15 10:30:00 2024
+!
+hostname Arista-EOS-Switch-01
+
+service routing protocols model multi-agent
+
+username admin privilege 15 role network-admin secret sha512 $6$abc123$def456
+username operator privilege 1 role network-operator secret sha512 $6$ghi789$jkl012
+
+ip name-server vrf default 8.8.8.8
+ip name-server vrf default 8.8.4.4
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1
+ntp server 10.1.1.2
+
+logging host 10.2.2.1
+logging host 10.2.2.2
+
+aaa authentication login default group radius local
+aaa authentication login console local
+
+radius-server host 10.3.3.1 key 7 "radiuskey123" timeout 10 retransmit 3
+
+vlan 1
+   name default
+
+vlan 100
+   name Server-VLAN
+   description Server network VLAN
+
+vlan 200
+   name Management-VLAN
+   description Management network
+
+vlan 300
+   name Storage-VLAN
+
+interface Ethernet1
+   description Server-01
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet2
+   description Server-02
+   switchport mode access
+   switchport access vlan 100
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet3
+   description Uplink-to-Core
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200,300
+   mtu 9000
+   speed forced 10G
+   no shutdown
+
+interface Ethernet4
+   description Port-Channel-Member
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   channel-group 10 mode active
+   no shutdown
+
+interface Ethernet5
+   description Port-Channel-Member
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   channel-group 10 mode active
+   no shutdown
+
+! Example of interface range (from run book/template config)
+interface range Ethernet6-10
+   description Server-Port-Range
+   switchport mode access
+   switchport access vlan 100
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+! Example of expanded individual interfaces (from show running-config output)
+! Note: show running-config expands ranges into individual interfaces
+interface Ethernet11
+   description Server-11
+   switchport mode access
+   switchport access vlan 100
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet12
+   description Server-12
+   switchport mode access
+   switchport access vlan 100
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Ethernet13
+   description Server-13
+   switchport mode access
+   switchport access vlan 100
+   mtu 1500
+   speed forced 1G
+   no shutdown
+
+interface Port-Channel10
+   description Uplink-PortChannel
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+   mlag 10
+
+interface Port-Channel20
+   description Peer-Link
+   switchport mode trunk
+   switchport trunk allowed vlan 1-4094
+   mtu 9000
+
+! Example of port-channel range (from run book/template config)
+interface range Port-Channel30-35
+   description Port-Channel-Range
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+
+! Example of expanded individual port-channels (from show running-config output)
+interface Port-Channel30
+   description PortChannel-30
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+
+interface Port-Channel31
+   description PortChannel-31
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+
+interface Port-Channel32
+   description PortChannel-32
+   switchport mode trunk
+   switchport trunk allowed vlan 100,200
+   mtu 9000
+
+interface Vlan100
+   description Server-VLAN-Interface
+   ip address 192.168.100.1/24
+   mtu 9000
+   no shutdown
+
+interface Vlan200
+   description Management-VLAN-Interface
+   ip address 192.168.200.1/24
+   no shutdown
+
+mlag configuration
+   domain-id 1
+   local-interface Vlan200
+   peer-address 192.168.200.2
+   peer-link Port-Channel20
+   reload-delay mlag 300
+   reload-delay non-mlag 330
+
+route-map DIRECT-TO-BGP permit 10
+   match ip address prefix-list DIRECT-CONNECTED
+
+route-map INBOUND-FILTER permit 10
+   match ip address prefix-list ALLOWED-ROUTES
+
+route-map OUTBOUND-FILTER permit 10
+   match ip address prefix-list ALLOWED-ROUTES
+
+ip prefix-list DIRECT-CONNECTED seq 10 permit 192.168.100.0/24
+ip prefix-list DIRECT-CONNECTED seq 20 permit 192.168.200.0/24
+ip prefix-list ALLOWED-ROUTES seq 10 permit 0.0.0.0/0 le 32
+
+router bgp 65001
+   router-id 192.168.100.1
+   !
+   address-family ipv4
+      redistribute connected route-map DIRECT-TO-BGP
+   !
+   neighbor 10.10.10.1 remote-as 65002
+   neighbor 10.10.10.1 description BGP-Peer-01
+   neighbor 10.10.10.1 update-source Loopback0
+   !
+   neighbor 10.10.10.2 remote-as 65002
+   neighbor 10.10.10.2 description BGP-Peer-02
+   neighbor 10.10.10.2 update-source Loopback0
+   !
+   neighbor 10.10.10.3 remote-as 65003
+   neighbor 10.10.10.3 description BGP-Peer-03
+   neighbor 10.10.10.3 ebgp-multihop 3
+   neighbor 10.10.10.3 route-map INBOUND-FILTER in
+   neighbor 10.10.10.3 route-map OUTBOUND-FILTER out
+
+interface Loopback0
+   ip address 10.0.0.1/32
+   description Router-ID-Loopback
+
+ip route 0.0.0.0/0 192.168.200.254
+
+line console
+line vty
+   session-limit 10

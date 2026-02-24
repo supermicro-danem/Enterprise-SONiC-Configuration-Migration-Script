@@ -1,0 +1,217 @@
+! Cisco NX-OS Test Configuration 4 - Distribution Switch with OSPF and TACACS+
+!Command: show running-config
+!Time: Mon Feb 12 17:00:00 2024
+version 9.3(5)
+hostname Dist-Switch-01
+
+feature telnet
+feature ssh
+feature ospf
+feature tacacs+
+feature lldp
+feature interface-vlan
+
+username admin password 5 $1$dist123 role network-admin
+username operator password 5 $1$op456 role network-operator
+
+ip domain-lookup
+ip name-server 8.8.8.8
+ip name-server 8.8.4.4
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1 prefer
+ntp server 10.1.1.2
+
+logging server 10.2.2.1 6
+logging server 10.2.2.2 6
+
+tacacs-server host 10.5.5.1 key 7 "tacacskey123" timeout 10
+tacacs-server host 10.5.5.2 key 7 "tacacskey456" timeout 10
+
+aaa group server tacacs+ TACACS-SERVERS
+  server 10.5.5.1
+  server 10.5.5.2
+  source-interface loopback0
+
+aaa authentication login default group TACACS-SERVERS local
+aaa authentication login console local
+aaa authorization commands default group TACACS-SERVERS local
+aaa accounting default group TACACS-SERVERS
+
+vlan 1
+  name default
+
+vlan 500
+  name Campus-Users
+  description Campus user access VLAN
+
+vlan 600
+  name Campus-Servers
+  description Campus server VLAN
+
+vlan 700
+  name Infrastructure
+  description Infrastructure and transit VLAN
+
+vlan 800
+  name WAN-Transit
+  description WAN transit VLAN
+
+interface Ethernet1/1
+  description Access-Switch-01-Uplink
+  no switchport
+  ip address 10.1.1.0/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.1
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/2
+  description Access-Switch-02-Uplink
+  no switchport
+  ip address 10.1.1.2/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.1
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/3
+  description Access-Switch-03-Uplink
+  no switchport
+  ip address 10.1.1.4/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.1
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/4
+  description Access-Switch-04-Uplink
+  no switchport
+  ip address 10.1.1.6/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.1
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/5
+  description Core-Router-01-Uplink
+  no switchport
+  ip address 10.0.0.1/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.0
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/6
+  description Core-Router-02-Uplink
+  no switchport
+  ip address 10.0.0.3/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.0
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/7
+  description WAN-Edge-01
+  no switchport
+  ip address 10.0.0.5/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.0
+  ip ospf cost 100
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/8
+  description Server-Trunk-01
+  switchport mode trunk
+  switchport trunk allowed vlan 500,600
+  mtu 9000
+  no shutdown
+
+interface Ethernet1/9
+  description Server-Trunk-02
+  switchport mode trunk
+  switchport trunk allowed vlan 500,600
+  mtu 9000
+  no shutdown
+
+interface port-channel50
+  description Core-Uplink-LAG
+  no switchport
+  ip address 10.0.0.10/31
+  ip ospf network point-to-point
+  ip router ospf UNDERLAY area 0.0.0.0
+  mtu 9000
+
+interface Ethernet1/10
+  description Port-Channel-50-Member-01
+  no switchport
+  channel-group 50 mode active
+  no shutdown
+
+interface Ethernet1/11
+  description Port-Channel-50-Member-02
+  no switchport
+  channel-group 50 mode active
+  no shutdown
+
+interface vlan 500
+  description Campus-Users-Gateway
+  ip address 192.168.50.1/24
+  ip router ospf UNDERLAY area 0.0.0.1
+  no shutdown
+
+interface vlan 600
+  description Campus-Servers-Gateway
+  ip address 192.168.60.1/24
+  ip router ospf UNDERLAY area 0.0.0.1
+  no shutdown
+
+interface vlan 700
+  description Infrastructure-Gateway
+  ip address 192.168.70.1/24
+  ip router ospf UNDERLAY area 0.0.0.0
+  no shutdown
+
+interface vlan 800
+  description WAN-Transit-Gateway
+  ip address 192.168.80.1/24
+  ip ospf network broadcast
+  ip router ospf UNDERLAY area 0.0.0.0
+  ip ospf cost 200
+  no shutdown
+
+interface loopback0
+  ip address 10.255.0.1/32
+  description Router-ID-Loopback
+  ip router ospf UNDERLAY area 0.0.0.0
+
+interface loopback1
+  ip address 10.255.1.1/32
+  description TACACS-Source-Loopback
+  ip router ospf UNDERLAY area 0.0.0.0
+
+router ospf UNDERLAY
+  router-id 10.255.0.1
+  auto-cost reference-bandwidth 100000
+  log-adjacency-changes detail
+  area 0.0.0.1 range 192.168.50.0/23
+  area 0.0.0.1 range 10.1.1.0/24
+  passive-interface default
+  no passive-interface Ethernet1/1
+  no passive-interface Ethernet1/2
+  no passive-interface Ethernet1/3
+  no passive-interface Ethernet1/4
+  no passive-interface Ethernet1/5
+  no passive-interface Ethernet1/6
+  no passive-interface Ethernet1/7
+  no passive-interface port-channel50
+  no passive-interface vlan800
+
+ip route 0.0.0.0/0 10.0.0.0
+
+line console
+line vty
+  session-limit 10

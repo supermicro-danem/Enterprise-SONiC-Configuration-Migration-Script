@@ -1,0 +1,63 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/arista_eos_leaf.cfg
+Output file: test_outputs\arista_eos_leaf_sonic.txt
+Hostname: DC1-LEAF-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 6
+Port-Channels: 1
+Loopback Interfaces: 1
+Static Routes: 0
+BGP Configured: True
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - dns domain dc.example.com (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - logging format timestamp high-resolution (line 17) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip routing (line 20) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet49
+  - no switchport (line 40) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet49
+  - ip address 10.0.1.0/31 (line 42) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet50
+  - no switchport (line 46) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet50
+  - ip address 10.0.1.2/31 (line 48) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1
+  - spanning-tree portfast (line 55) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet2
+  - spanning-tree portfast (line 61) - Configuration not translated; configure manually on SONiC if needed.
+
+router bgp 65001
+  - maximum-paths 4 (line 99) - Configuration not translated; configure manually on SONiC if needed.
+
+route-map CONNECTED_TO_BGP
+  - 10 permit tcp 10.0.0.0/8 any eq ssh (line 117) - Configuration not translated; configure manually on SONiC if needed.
+
+route-map CONNECTED_TO_BGP
+  - 20 permit tcp 10.0.0.0/8 any eq https (line 118) - Configuration not translated; configure manually on SONiC if needed.
+
+route-map CONNECTED_TO_BGP
+  - 30 deny ip any any log (line 119) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

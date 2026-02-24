@@ -1,0 +1,280 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/juniper_junos_leaf.cfg
+Output file: test_outputs\juniper_junos_leaf_sonic.txt
+Hostname: DC1-LEAF-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 6
+Port-Channels: 1
+Loopback Interfaces: 1
+Static Routes: 0
+BGP Configured: True
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - system (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - host-name DC1-LEAF-01 (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - domain-name dc.example.com (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - domain-name dc.example.com (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - name-server (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+name-server
+  - 10.0.0.10 (line 11) - Configuration not translated; configure manually on SONiC if needed.
+
+name-server
+  - 10.0.0.11 (line 12) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - ntp (line 14) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - ntp (line 14) - Configuration not translated; configure manually on SONiC if needed.
+
+ntp
+  - server 10.0.0.20 (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+ntp
+  - server 10.0.0.21 (line 16) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - syslog (line 18) - Configuration not translated; configure manually on SONiC if needed.
+
+system
+  - syslog (line 18) - Configuration not translated; configure manually on SONiC if needed.
+
+syslog
+  - host 10.0.0.30 (line 19) - Configuration not translated; configure manually on SONiC if needed.
+
+host 10.0.0.30
+  - any notice (line 20) - Configuration not translated; configure manually on SONiC if needed.
+
+host 10.0.0.30
+  - any notice (line 20) - Configuration not translated; configure manually on SONiC if needed.
+
+  - chassis (line 25) - Configuration not translated; configure manually on SONiC if needed.
+
+chassis
+  - aggregated-devices (line 26) - Configuration not translated; configure manually on SONiC if needed.
+
+aggregated-devices
+  - ethernet (line 27) - Configuration not translated; configure manually on SONiC if needed.
+
+ethernet
+  - device-count 16 (line 28) - Configuration not translated; configure manually on SONiC if needed.
+
+  - interfaces (line 33) - Configuration not translated; configure manually on SONiC if needed.
+
+lo0
+  - unit 0 (line 35) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family inet (line 37) - Configuration not translated; configure manually on SONiC if needed.
+
+et-0/0/48
+  - mtu 9216 (line 44) - Configuration not translated; configure manually on SONiC if needed.
+
+et-0/0/48
+  - unit 0 (line 45) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family inet (line 46) - Configuration not translated; configure manually on SONiC if needed.
+
+family inet
+  - address 10.0.1.0/31 (line 47) - Configuration not translated; configure manually on SONiC if needed.
+
+et-0/0/49
+  - mtu 9216 (line 53) - Configuration not translated; configure manually on SONiC if needed.
+
+et-0/0/49
+  - unit 0 (line 54) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family inet (line 55) - Configuration not translated; configure manually on SONiC if needed.
+
+family inet
+  - address 10.0.1.2/31 (line 56) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/0
+  - unit 0 (line 62) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 63) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/1
+  - unit 0 (line 73) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 74) - Configuration not translated; configure manually on SONiC if needed.
+
+ae10
+  - mtu 9216 (line 84) - Configuration not translated; configure manually on SONiC if needed.
+
+ae10
+  - native-vlan-id 999 (line 85) - Configuration not translated; configure manually on SONiC if needed.
+
+ae10
+  - aggregated-ether-options (line 86) - Configuration not translated; configure manually on SONiC if needed.
+
+aggregated-ether-options
+  - lacp (line 87) - Configuration not translated; configure manually on SONiC if needed.
+
+lacp
+  - active (line 88) - Configuration not translated; configure manually on SONiC if needed.
+
+ae10
+  - unit 0 (line 91) - Configuration not translated; configure manually on SONiC if needed.
+
+unit 0
+  - family ethernet-switching (line 92) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/10
+  - ether-options (line 102) - Configuration not translated; configure manually on SONiC if needed.
+
+xe-0/0/11
+  - ether-options (line 108) - Configuration not translated; configure manually on SONiC if needed.
+
+  - vlans (line 128) - Configuration not translated; configure manually on SONiC if needed.
+
+Compute_Prod
+  - l3-interface irb.100 (line 131) - Configuration not translated; configure manually on SONiC if needed.
+
+Storage_Prod
+  - l3-interface irb.200 (line 135) - Configuration not translated; configure manually on SONiC if needed.
+
+  - routing-options (line 142) - Configuration not translated; configure manually on SONiC if needed.
+
+routing-options
+  - forwarding-table (line 145) - Configuration not translated; configure manually on SONiC if needed.
+
+forwarding-table
+  - export LOAD_BALANCE (line 146) - Configuration not translated; configure manually on SONiC if needed.
+
+  - protocols (line 150) - Configuration not translated; configure manually on SONiC if needed.
+
+protocols
+  - bgp (line 151) - Configuration not translated; configure manually on SONiC if needed.
+
+bgp
+  - group SPINE_PEERS (line 152) - Configuration not translated; configure manually on SONiC if needed.
+
+group SPINE_PEERS
+  - type external (line 153) - Configuration not translated; configure manually on SONiC if needed.
+
+group SPINE_PEERS
+  - peer-as 65000 (line 154) - Configuration not translated; configure manually on SONiC if needed.
+
+group SPINE_PEERS
+  - multipath (line 155) - Configuration not translated; configure manually on SONiC if needed.
+
+group SPINE_PEERS
+  - neighbor 10.0.1.1 (line 157) - Configuration not translated; configure manually on SONiC if needed.
+
+group SPINE_PEERS
+  - neighbor 10.0.1.3 (line 160) - Configuration not translated; configure manually on SONiC if needed.
+
+protocols
+  - lldp (line 165) - Configuration not translated; configure manually on SONiC if needed.
+
+lldp
+  - interface all (line 166) - Configuration not translated; configure manually on SONiC if needed.
+
+protocols
+  - rstp (line 168) - Configuration not translated; configure manually on SONiC if needed.
+
+rstp
+  - interface xe-0/0/0 (line 169) - Configuration not translated; configure manually on SONiC if needed.
+
+interface xe-0/0/0
+  - edge (line 170) - Configuration not translated; configure manually on SONiC if needed.
+
+rstp
+  - interface xe-0/0/1 (line 172) - Configuration not translated; configure manually on SONiC if needed.
+
+interface xe-0/0/1
+  - edge (line 173) - Configuration not translated; configure manually on SONiC if needed.
+
+  - policy-options (line 178) - Configuration not translated; configure manually on SONiC if needed.
+
+  - firewall (line 208) - Configuration not translated; configure manually on SONiC if needed.
+
+firewall
+  - family inet (line 209) - Configuration not translated; configure manually on SONiC if needed.
+
+family inet
+  - filter MGMT_ACCESS (line 210) - Configuration not translated; configure manually on SONiC if needed.
+
+filter MGMT_ACCESS
+  - term ALLOW_SSH (line 211) - Configuration not translated; configure manually on SONiC if needed.
+
+term ALLOW_SSH
+  - from (line 212) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - source-address (line 213) - Configuration not translated; configure manually on SONiC if needed.
+
+source-address
+  - 10.0.0.0/8 (line 214) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - protocol tcp (line 216) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - destination-port ssh (line 217) - Configuration not translated; configure manually on SONiC if needed.
+
+term ALLOW_SSH
+  - then accept (line 219) - Configuration not translated; configure manually on SONiC if needed.
+
+filter MGMT_ACCESS
+  - term ALLOW_HTTPS (line 221) - Configuration not translated; configure manually on SONiC if needed.
+
+term ALLOW_HTTPS
+  - from (line 222) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - source-address (line 223) - Configuration not translated; configure manually on SONiC if needed.
+
+source-address
+  - 10.0.0.0/8 (line 224) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - protocol tcp (line 226) - Configuration not translated; configure manually on SONiC if needed.
+
+from
+  - destination-port https (line 227) - Configuration not translated; configure manually on SONiC if needed.
+
+term ALLOW_HTTPS
+  - then accept (line 229) - Configuration not translated; configure manually on SONiC if needed.
+
+filter MGMT_ACCESS
+  - term DENY_ALL (line 231) - Configuration not translated; configure manually on SONiC if needed.
+
+term DENY_ALL
+  - then (line 232) - Configuration not translated; configure manually on SONiC if needed.
+
+then
+  - discard (line 233) - Configuration not translated; configure manually on SONiC if needed.
+
+then
+  - log (line 234) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

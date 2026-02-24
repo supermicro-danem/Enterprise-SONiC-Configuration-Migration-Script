@@ -1,0 +1,173 @@
+# Cumulus Linux NCLU Configuration - Campus Access Switch
+# Device: Campus-Access-Cumulus-01
+# Cumulus Linux Version: 4.5.x
+# Format: net show configuration commands output
+#         (copy/paste into IS-CLI or apply with: sudo net commit)
+#
+# Source configs translated:
+#   arista_eos_test2.txt   (Campus-Access-Switch-01)
+#   cisco_nxos_test2.txt   (Access-Switch-01) [L2/LAG/BGP only;
+#     VRRP/VRR first-hop redundancy is covered in cumulus_nclu_test3.txt]
+#
+# Translation map:
+#   EOS/NX-OS VLANs 100,200,300               -> bridge vids 100,200,300
+#   EOS/NX-OS access ports (VLAN 100)          -> bridge access 100
+#   EOS/NX-OS voice trunk (vlans 100,200,
+#     native vlan 100)                         -> bridge trunk vlans 100,200
+#                                                 + bridge pvid 100 (per-port)
+#   EOS/NX-OS guest access (VLAN 300)          -> bridge access 300
+#   EOS/NX-OS uplink trunk (vlans 100,200,300) -> bridge trunk vlans 100,200,300
+#   EOS Port-Channel1 / NX-OS port-channel1    -> bond1 (swp7 + swp8)
+#   EOS/NX-OS BGP AS 65100                     -> net add bgp autonomous-system 65100
+#
+# OUT OF SCOPE FOR NCLU - requires direct file edits:
+#   NTP server prefer keyword           -> /etc/ntp.conf (not available in NCLU)
+#   See file-config reference notes at bottom of this file.
+#
+# DESIGN NOTE - LACP rate:
+#   EOS channel-group mode active / NX-OS channel-group mode active both
+#   default to slow LACP (30-second PDUs). bond lacp-rate fast uses
+#   1-second PDUs and is the Cumulus recommended practice. Use
+#   "bond lacp-rate slow" to match the reference configs exactly.
+# ============================================================================
+
+# --- System ---
+net add hostname Campus-Access-Cumulus-01
+
+# --- Loopback ---
+net add loopback lo ip address 10.0.0.2/32
+
+# --- DNS ---
+# EOS: ip name-server vrf default 8.8.8.8 | NX-OS: ip name-server 8.8.8.8
+net add dns nameserver ipv4 8.8.8.8
+
+# --- NTP ---
+# EOS/NX-OS: ntp server 10.1.1.1
+# NOTE: "prefer" keyword not available via NCLU. Set in /etc/ntp.conf if needed.
+net add time ntp server 10.1.1.1 iburst
+
+# --- Syslog ---
+# EOS: logging host 10.2.2.1 | NX-OS: logging server 10.2.2.1
+net add syslog host ipv4 10.2.2.1 port udp 514
+
+# --- SNMP ---
+# EOS/NX-OS: snmp-server community public ro
+net add snmp-server listening-address all
+net add snmp-server readonly-community public access any
+
+# --- Bridge (VLAN-aware mode) ---
+# VLANs 100 (Users), 200 (Voice), 300 (Guest)
+# EOS/NX-OS: vlan 100 / vlan 200 / vlan 300
+# bridge-pvid 1: default native VLAN for ports without an explicit pvid.
+# swp3 and swp4 override this with bridge pvid 100 (voice native VLAN).
+net add bridge bridge vlan-aware
+net add bridge bridge vids 100,200,300
+net add bridge bridge pvid 1
+
+# --- User Access Ports (VLAN 100) ---
+# EOS Ethernet1: access vlan 100, mtu 1500, 1G
+# NX-OS Ethernet1/1: access vlan 100, mtu 1500, 1000
+net add interface swp1 alias Access-Port-01
+net add interface swp1 mtu 1500
+net add interface swp1 link speed 1000
+net add interface swp1 bridge access 100
+net add bridge bridge ports swp1
+
+# EOS Ethernet2: access vlan 100, mtu 1500, 1G
+# NX-OS Ethernet1/2: access vlan 100, mtu 1500, 1000
+net add interface swp2 alias Access-Port-02
+net add interface swp2 mtu 1500
+net add interface swp2 link speed 1000
+net add interface swp2 bridge access 100
+net add bridge bridge ports swp2
+
+# --- Voice Trunk Ports (VLANs 100 + 200, native VLAN 100) ---
+# EOS Ethernet3: trunk allowed vlan 100,200 / trunk native vlan 100, mtu 1500, 1G
+# NX-OS Ethernet1/3: trunk allowed vlan 100,200 / trunk native vlan 100, mtu 1500, 1000
+#
+# bridge trunk vlans 100,200: allows tagged frames for both VLANs
+# bridge pvid 100: untagged frames ingress as VLAN 100 (the data VLAN for
+#   the IP phone). This is a per-port override of the bridge-level pvid 1.
+net add interface swp3 alias Voice-Port-01
+net add interface swp3 mtu 1500
+net add interface swp3 link speed 1000
+net add interface swp3 bridge trunk vlans 100,200
+net add interface swp3 bridge pvid 100
+net add bridge bridge ports swp3
+
+# EOS Ethernet4: same voice trunk config
+# NX-OS Ethernet1/4: same
+net add interface swp4 alias Voice-Port-02
+net add interface swp4 mtu 1500
+net add interface swp4 link speed 1000
+net add interface swp4 bridge trunk vlans 100,200
+net add interface swp4 bridge pvid 100
+net add bridge bridge ports swp4
+
+# --- Guest Access Port (VLAN 300) ---
+# EOS Ethernet5: access vlan 300, mtu 1500, 1G
+# NX-OS Ethernet1/5: access vlan 300, mtu 1500, 1000
+net add interface swp5 alias Guest-Port-01
+net add interface swp5 mtu 1500
+net add interface swp5 link speed 1000
+net add interface swp5 bridge access 300
+net add bridge bridge ports swp5
+
+# --- Uplink Trunk to Distribution (standalone port) ---
+# EOS Ethernet6: trunk allowed vlan 100,200,300, mtu 9000, 10G
+# NX-OS Ethernet1/6: same
+# This is a standalone uplink port. The bonded uplink LAG (bond1) is below.
+net add interface swp6 alias Uplink-to-Distribution
+net add interface swp6 mtu 9000
+net add interface swp6 link speed 10000
+net add interface swp6 bridge trunk vlans 100,200,300
+net add bridge bridge ports swp6
+
+# --- Uplink LAG Bond ---
+# EOS Port-Channel1 (Ethernet7 + Ethernet8, trunk vlans 100,200,300, mtu 9000)
+# NX-OS port-channel1 (Ethernet1/7 + Ethernet1/8, trunk vlans 100,200,300, mtu 9000)
+# No clag id: this switch is NOT part of an MLAG pair; bond1 is a standard
+#   LACP LAG with no dual-homing to a peer switch.
+net add bond bond1 alias Uplink-LAG
+net add bond bond1 bond slaves swp7,swp8
+net add bond bond1 mtu 9000
+net add bond bond1 bond lacp-rate fast
+net add bond bond1 bond min-links 1
+net add bond bond1 bridge trunk vlans 100,200,300
+net add bridge bridge ports bond1
+
+# --- SVIs ---
+# EOS: interface Vlan<N> / NX-OS: interface vlan <N>
+
+# VLAN 100 Users
+net add vlan 100 alias Users-VLAN-Interface
+net add vlan 100 ip address 192.168.100.1/24
+
+# VLAN 200 Voice
+net add vlan 200 alias Voice-VLAN-Interface
+net add vlan 200 ip address 192.168.200.1/24
+
+# VLAN 300 Guest
+# Note: 192.168.3.1/24 matches the reference configs exactly (not a typo).
+net add vlan 300 alias Guest-VLAN-Interface
+net add vlan 300 ip address 192.168.3.1/24
+
+# --- BGP ---
+# EOS: router bgp 65100 / NX-OS: router bgp 65100
+net add bgp autonomous-system 65100
+net add bgp router-id 192.168.100.1
+net add bgp neighbor 192.168.100.10 remote-as 65000
+net add bgp neighbor 192.168.100.10 description Distribution-Switch
+net add bgp neighbor 192.168.100.10 ebgp-multihop 2
+
+# --- Static Default Route ---
+# EOS/NX-OS: ip route 0.0.0.0/0 192.168.100.254
+net add routing route 0.0.0.0/0 192.168.100.254
+
+# ============================================================================
+# OUT-OF-SCOPE FILE CONFIGS (not configurable via NCLU)
+#
+# /etc/ntp.conf  (NTP prefer flag - not available via NCLU)
+#   server 10.1.1.1 iburst
+#   (No prefer in reference configs for this device - matches NCLU output above)
+# ============================================================================

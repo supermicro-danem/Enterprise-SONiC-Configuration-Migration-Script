@@ -1,0 +1,345 @@
+version "21.4R3.12";
+system {
+    host-name QFX-Switch-01;
+    root-authentication {
+        encrypted-password "$6$abc123$def456"; ## SECRET-DATA
+    }
+    name-server {
+        8.8.8.8;
+        8.8.4.4;
+    }
+    syslog {
+        host 10.2.2.1 {
+            any info;
+        }
+        host 10.2.2.2 {
+            any info;
+        }
+    }
+    ntp {
+        server 10.1.1.1;
+        server 10.1.1.2;
+    }
+    radius-server {
+        10.3.3.1 {
+            secret "$9$radiuskey123"; ## SECRET-DATA
+            timeout 10;
+            retry-count 3;
+        }
+    }
+    authentication-order [ radius password ];
+}
+chassis {
+    aggregated-devices {
+        ethernet {
+            device-count 33;
+        }
+    }
+}
+interfaces {
+    xe-0/0/0 {
+        description "Server-01";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN ];
+                }
+            }
+        }
+    }
+    xe-0/0/1 {
+        description "Server-02";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/2 {
+        description "Uplink-to-Core";
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN Storage-VLAN ];
+                }
+            }
+        }
+    }
+    xe-0/0/3 {
+        description "Port-Channel-Member";
+        ether-options {
+            802.3ad ae10;
+        }
+    }
+    xe-0/0/4 {
+        description "Port-Channel-Member";
+        ether-options {
+            802.3ad ae10;
+        }
+    }
+    ## Example of expanded individual interfaces (from show configuration output)
+    ## Note: JunOS show configuration shows individual interfaces, not ranges
+    ## But run books may use apply-groups or wildcards for range-like configs
+    xe-0/0/5 {
+        description "Server-05";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/6 {
+        description "Server-06";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/7 {
+        description "Server-07";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/8 {
+        description "Server-08";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/9 {
+        description "Server-09";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    xe-0/0/10 {
+        description "Server-10";
+        unit 0 {
+            family ethernet-switching {
+                port-mode access;
+                vlan {
+                    members Server-VLAN;
+                }
+            }
+        }
+    }
+    ae10 {
+        description "Uplink-PortChannel";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN ];
+                }
+            }
+        }
+    }
+    ae20 {
+        description "Peer-Link";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members all;
+                }
+            }
+        }
+    }
+    ## Example of expanded individual aggregated ethernet interfaces
+    ## (from show configuration output - JunOS shows individual AEs)
+    ae30 {
+        description "PortChannel-30";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN ];
+                }
+            }
+        }
+    }
+    ae31 {
+        description "PortChannel-31";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN ];
+                }
+            }
+        }
+    }
+    ae32 {
+        description "PortChannel-32";
+        aggregated-ether-options {
+            lacp {
+                active;
+            }
+        }
+        unit 0 {
+            family ethernet-switching {
+                port-mode trunk;
+                vlan {
+                    members [ Server-VLAN Management-VLAN ];
+                }
+            }
+        }
+    }
+    vlan {
+        unit 100 {
+            description "Server-VLAN-Interface";
+            family inet {
+                address 192.168.100.1/24;
+            }
+        }
+        unit 200 {
+            description "Management-VLAN-Interface";
+            family inet {
+                address 192.168.200.1/24;
+            }
+        }
+    }
+    lo0 {
+        unit 0 {
+            description "Router-ID-Loopback";
+            family inet {
+                address 10.0.0.1/32;
+            }
+        }
+    }
+}
+vlans {
+    default {
+        vlan-id 1;
+    }
+    Server-VLAN {
+        vlan-id 100;
+        description "Server network VLAN";
+    }
+    Management-VLAN {
+        vlan-id 200;
+        description "Management network";
+    }
+    Storage-VLAN {
+        vlan-id 300;
+    }
+}
+protocols {
+    bgp {
+        group external-peers {
+            type external;
+            local-address 10.0.0.1;
+            neighbor 10.10.10.1 {
+                description "BGP-Peer-01";
+                peer-as 65002;
+            }
+            neighbor 10.10.10.2 {
+                description "BGP-Peer-02";
+                peer-as 65002;
+            }
+            neighbor 10.10.10.3 {
+                description "BGP-Peer-03";
+                peer-as 65003;
+                multihop {
+                    ttl 3;
+                }
+                import INBOUND-FILTER;
+                export OUTBOUND-FILTER;
+            }
+        }
+    }
+    vrrp {
+        group vrrp-group-1 {
+            interface vlan.100;
+            virtual-address 192.168.100.254;
+            priority 100;
+            preempt;
+        }
+    }
+    mc-lag {
+        icp {
+            peer-address 192.168.200.2;
+            peer-id 2;
+        }
+        chassis-id 1;
+        interface ae10 {
+            mc-ae-id 10;
+            redundancy-group 1;
+        }
+    }
+}
+policy-options {
+    policy-statement INBOUND-FILTER {
+        term accept-all {
+            then accept;
+        }
+    }
+    policy-statement OUTBOUND-FILTER {
+        term accept-all {
+            then accept;
+        }
+    }
+}
+routing-options {
+    autonomous-system 65001;
+    static {
+        route 0.0.0.0/0 next-hop 192.168.200.254;
+    }
+    router-id 10.0.0.1;
+}
+snmp {
+    community public {
+        authorization read-only;
+    }
+    community private {
+        authorization read-write;
+    }
+}

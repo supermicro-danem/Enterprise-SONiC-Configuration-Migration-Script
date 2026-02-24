@@ -1,0 +1,202 @@
+!Command: show running-config
+!Time: Mon Jan 15 10:30:00 2024
+version 9.3(5)
+hostname NX-OS-Switch-01
+
+feature telnet
+feature ssh
+feature bgp
+feature vpc
+feature lldp
+
+username admin password 5 $1$abc123 role network-admin
+username operator password 5 $1$def456 role network-operator
+
+ip domain-lookup
+ip name-server 8.8.8.8
+ip name-server 8.8.4.4
+
+snmp-server community public ro
+snmp-server community private rw
+
+ntp server 10.1.1.1
+ntp server 10.1.1.2
+
+logging server 10.2.2.1
+logging server 10.2.2.2
+
+radius-server host 10.3.3.1 key 7 "radiuskey123" timeout 10 retransmit 3
+
+vlan 1
+  name default
+
+vlan 100
+  name Server-VLAN
+  description Server network VLAN
+
+vlan 200
+  name Management-VLAN
+  description Management network
+
+vlan 300
+  name Storage-VLAN
+
+interface Ethernet1/1
+  description Server-01
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/2
+  description Server-02
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/3
+  description Uplink-to-Core
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200,300
+  mtu 9000
+  speed 10000
+  no shutdown
+
+interface Ethernet1/4
+  description Port-Channel-Member
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  channel-group 10 mode active
+  no shutdown
+
+interface Ethernet1/5
+  description Port-Channel-Member
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  channel-group 10 mode active
+  no shutdown
+
+! Example of interface range (from run book/template config)
+interface ethernet 1/6-10
+  description Server-Port-Range
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+! Example of expanded individual interfaces (from show running-config output)
+! Note: show running-config expands ranges into individual interfaces
+interface Ethernet1/11
+  description Server-11
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/12
+  description Server-12
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface Ethernet1/13
+  description Server-13
+  switchport mode access
+  switchport access vlan 100
+  mtu 1500
+  speed 1000
+  no shutdown
+
+interface port-channel10
+  description Uplink-PortChannel
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+  vpc 10
+
+interface port-channel20
+  description Peer-Link
+  switchport mode trunk
+  switchport trunk allowed vlan 1-4094
+  mtu 9000
+  vpc peer-link
+
+! Example of port-channel range (from run book/template config)
+interface port-channel 30-35
+  description Port-Channel-Range
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+
+! Example of expanded individual port-channels (from show running-config output)
+interface port-channel30
+  description PortChannel-30
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+
+interface port-channel31
+  description PortChannel-31
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+
+interface port-channel32
+  description PortChannel-32
+  switchport mode trunk
+  switchport trunk allowed vlan 100,200
+  mtu 9000
+
+interface vlan100
+  description Server-VLAN-Interface
+  ip address 192.168.100.1 255.255.255.0
+  mtu 9000
+  no shutdown
+
+interface vlan200
+  description Management-VLAN-Interface
+  ip address 192.168.200.1 255.255.255.0
+  no shutdown
+
+vpc domain 1
+  peer-keepalive destination 192.168.200.2 source 192.168.200.1
+  peer-gateway
+  auto-recovery
+  system-priority 8192
+  system-mac 00:11:22:33:44:55
+
+router bgp 65001
+  router-id 192.168.100.1
+  address-family ipv4 unicast
+    redistribute direct route-map DIRECT-TO-BGP
+  neighbor 10.10.10.1
+    remote-as 65002
+    description BGP-Peer-01
+    update-source loopback0
+  neighbor 10.10.10.2
+    remote-as 65002
+    description BGP-Peer-02
+    update-source loopback0
+  neighbor 10.10.10.3
+    remote-as 65003
+    description BGP-Peer-03
+    ebgp-multihop 3
+    route-map INBOUND-FILTER in
+    route-map OUTBOUND-FILTER out
+
+interface loopback0
+  ip address 10.0.0.1 255.255.255.255
+  description Router-ID-Loopback
+
+ip route 0.0.0.0/0 192.168.200.254
+
+line console
+line vty
+  session-limit 10
