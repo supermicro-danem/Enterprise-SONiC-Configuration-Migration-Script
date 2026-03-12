@@ -107,7 +107,7 @@ If inferred, you'll see: `Inferred management gateway from static routes: <gatew
 
 The tool generates two files:
 
-1. **SONiC Configuration File** (`<output_file>`): Contains the Enterprise SONiC CLI commands
+1. **SONiC Configuration File** (`<output_file>`): Contains the Enterprise SONiC CLI commands. The file is organized for readability with `!` separators between blocks. After setting hostname and interface-naming standard, the script instructs you to exit once, run `write memory`, then exit again to return to the Linux shell, then re-enter `sonic-cli` to continue. MCLAG member PortChannels appear after the MCLAG domain block. Management0 and other interface blocks use indented sub-commands; native/untagged VLANs are emitted as `switchport access vlan <id>`.
 2. **Migration Report** (`<output_file>.report.txt`): Contains:
    - Migration statistics (VLANs, interfaces, routes, etc.)
    - List of unsupported features (if any)
@@ -184,7 +184,7 @@ Run the automated test suite to validate all configurations:
 python3 test_all_configs.py
 ```
 
-This will test all sample configurations (19 total: 5 Cisco, 4 Arista, 5 Juniper, 3 Cumulus) and generate a summary report.
+This will test all sample configurations (16 total: 5 Cisco, 4 Arista, 4 Juniper, 3 Cumulus) and generate a summary report.
 
 ## Configuration File Formats
 
@@ -209,9 +209,9 @@ NCLU (Network Command Line Utility) format with `net add` commands. This is the 
 
 **Cumulus translation details**:
 - **BGP**: `net add bgp neighbor <IP> remote-as <AS>` and sub-commands (description, update-source, ebgp-multihop) are parsed and emitted as SONiC BGP neighbor config. `update-source lo` is mapped to `Loopback0`.
-- **Native VLAN on trunk**: `net add interface swpX bridge pvid <vlan>` is translated to `switchport trunk native vlan <vlan>`.
+- **Native VLAN on trunk**: `net add interface swpX bridge pvid <vlan>` is translated to `switchport access vlan <vlan>`.
 - **VRR → VRRP**: `ip address-virtual <MAC> <VIP>` uses the VRR MAC (`00:00:5e:00:01:XX`) to derive the VRRP group number (last octet hex → decimal). A comment block in the SONiC output explains the active/active (VRR) vs active/standby (VRRP) behavioral difference.
-- **Management 0**: When the source has no explicit OOB management config (typical for NCLU), the tool does not create a Management 0 IP that duplicates an SVI address.
+- **Management 0**: NCLU has no explicit OOB management in config; the tool uses the same prompt logic as other NOSes (e.g. when MCLAG needs a management IP). When the user supplies management IP at prompt, Management0 is created. When the source has explicit management and the IP would duplicate an SVI, the tool does not create Management0 for that case.
 - **Peer-link trunk**: The MLAG peer-link PortChannel gets explicit `switchport trunk allowed vlan` from the source bridge VLAN set (`bridge vids`).
 
 **Special Considerations**:
@@ -237,14 +237,14 @@ The tool automatically converts vendor-specific interface names to SONiC format:
   - **Bond Translation**: `bond1` → `PortChannel 1`, `bond20` → `PortChannel 20`, `peerlink` → MLAG peer-link port-channel
   - **MLAG/clag**: Translates `clag` commands to SONiC MCLAG format; peer-link gets trunk VLANs from bridge vids
   - **VRR to VRRP**: Translates Cumulus VRR (`ip address-virtual`) to SONiC VRRP; VRRP group from VRR MAC last octet; duplicate VRRP lines suppressed; behavioral note (active/active → active/standby) in output
-  - **Bridge pvid**: Per-port `bridge pvid <vlan>` → `switchport trunk native vlan <vlan>`
+  - **Bridge pvid**: Per-port `bridge pvid <vlan>` → `switchport access vlan <vlan>`
   - **NTP Prefer**: Prompts user if multiple NTP servers exist (NCLU doesn't support `prefer` flag)
   - **AAA/RADIUS**: Prompts user if AAA is used (configured via files, not NCLU)
 - **Interface Ranges**: Supports both explicit `interface range` commands and expanded individual interfaces
 - **Management VRF**: Automatically configures `ip vrf mgmt` for Management0 interface (placed before interface configuration)
 - **Description fields**: All description values in the generated SONiC config are enclosed in double quotes (e.g., `description "My Interface"`).
 - **Partial Migration**: The tool will generate a valid SONiC configuration even if some features are unsupported
-- **Test Configurations**: All sample configurations have been validated and tested (19 total)
+- **Test Configurations**: All sample configurations have been validated and tested (16 total)
 
 ## Troubleshooting
 
@@ -273,9 +273,15 @@ When adding support for new features or OS types:
 
 ## Version History
 
+- **v1.3**: Output configuration organization
+  - Header flow: after hostname and interface-naming standard, emit exit → write memory → exit (then re-enter sonic-cli to continue)
+  - MCLAG: domain block (with space-prefixed sub-commands and trailing exit) emitted before MCLAG member PortChannels
+  - Comment separators (`!`) between interface blocks (VLAN, physical, PortChannel, loopback, range) and between `ip vrf mgmt` and Management0
+  - Management0: `  ip address` sub-command; NCLU creates Management0 when user supplies management IP (same prompt logic as other NOSes)
+  - Output uses `switchport access vlan <id>` instead of `switchport trunk native vlan` for native/untagged VLANs
 - **v1.2**: Cumulus and generator enhancements
   - Cumulus BGP: full neighbor translation (remote-as, description, update-source, ebgp-multihop)
-  - Cumulus: bridge pvid per-port → switchport trunk native vlan
+  - Cumulus: bridge pvid per-port → switchport access vlan
   - VRRP group number derived from VRR MAC (00:00:5e:00:01:XX)
   - Duplicate VRRP command suppression in output
   - Management 0: do not create when source has no explicit OOB and IP would mirror an SVI
