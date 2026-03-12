@@ -75,7 +75,7 @@ Access switch with **VRR** (Virtual Router Redundancy) → translated to VRRP:
 
 **Cumulus-specific mappings:**
 - `swpN` → `Eth 1/N`; `bondN` → `PortChannel N`; `peerlink` → MLAG peer-link PortChannel
-- `bridge pvid <vlan>` (per-port) → `switchport trunk native vlan <vlan>`
+- `bridge pvid <vlan>` (per-port) → `switchport access vlan <vlan>`
 - `ip address-virtual` (VRR) → VRRP with group ID from VRR MAC `00:00:5e:00:01:XX`
 - Peer-link gets `switchport trunk allowed vlan` from bridge vids
 
@@ -114,7 +114,7 @@ Each configuration should generate a corresponding Enterprise SONiC configuratio
 - Converted port-channel/LAG configurations (Cumulus bonds → PortChannels)
 - Converted MLAG/VPC/MC-LAG/clag to MCLAG (Cumulus peerlink → peer-link PortChannel with trunk VLANs from bridge vids)
 - Converted BGP configurations (Cumulus: neighbor remote-as, description, update-source Loopback0, ebgp-multihop)
-- VRR (Cumulus) → VRRP with group from VRR MAC; trunk native vlan from bridge pvid
+- VRR (Cumulus) → VRRP with group from VRR MAC; access vlan from bridge pvid
 - Management interface configuration (Cumulus: no Management 0 IP when source has no explicit OOB and it would mirror an SVI)
 - User accounts
 - System services (NTP, syslog, SNMP, RADIUS)
