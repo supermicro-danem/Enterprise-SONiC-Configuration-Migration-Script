@@ -20,7 +20,7 @@ sonic-cli
 !
 configure terminal
 !
-spanning-tree mode rstp
+spanning-tree mode rapid-pvst
 !
 username admin password CHANGE_ME_PLACEHOLDER role admin
 username operator password CHANGE_ME_PLACEHOLDER role network-operator
@@ -102,12 +102,14 @@ interface Eth 1/4
 exit
 !
 interface Eth 1/5
+  mtu 9000
   description "Port-Channel-100-Member-01"
   channel-group 100
   no shutdown
 exit
 !
 interface Eth 1/6
+  mtu 9000
   description "Port-Channel-100-Member-02"
   channel-group 100
   no shutdown
@@ -138,27 +140,27 @@ router bgp 65000
  neighbor 10.0.0.10
   remote-as 65001
   description "Spine-02"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 3
  neighbor 10.0.0.20
   remote-as 65002
   description "Leaf-01"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 2
  neighbor 10.0.0.21
   remote-as 65002
   description "Leaf-02"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 2
  neighbor 10.0.0.22
   remote-as 65002
   description "Leaf-03"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 2
  neighbor 10.0.0.23
   remote-as 65002
   description "Leaf-04"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 2
 exit
 !

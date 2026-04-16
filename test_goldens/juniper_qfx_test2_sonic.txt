@@ -20,7 +20,7 @@ sonic-cli
 !
 configure terminal
 !
-spanning-tree mode rstp
+spanning-tree mode rapid-pvst
 !
 username admin password CHANGE_ME_PLACEHOLDER role admin
 !

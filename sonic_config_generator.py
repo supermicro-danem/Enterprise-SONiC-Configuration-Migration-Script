@@ -31,6 +31,42 @@ class SonicConfigGenerator:
             return s
         return f'"{s}"'
 
+    @staticmethod
+    def _is_ip_literal(value: str) -> bool:
+        """Return True when value is an IPv4 or IPv6 address literal.
+
+        Used by HW-10 update-source emission: EAS expects either an IP
+        literal OR the 'interface' keyword followed by a name. When the
+        value is an IP, the 'interface' keyword must NOT be emitted.
+        """
+        if not value:
+            return False
+        v = str(value).strip()
+        # IPv4 dotted-quad
+        if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', v):
+            return True
+        # IPv6: presence of ':' is a sufficient and conservative heuristic;
+        # any source-config value that contains a colon is not an interface name.
+        if ':' in v:
+            return True
+        return False
+
+    def _emit_update_source(self, value: str, indent: str = '  ') -> str:
+        """Build a single 'update-source ...' line for a BGP neighbor.
+
+        HW-10: EAS '(config-router-bgp-neighbor)# update-source ?' returns
+        either an IP literal (A.B.C.D / A::B) OR the keyword 'interface'
+        followed by an interface name. A bare interface token (e.g.
+        'update-source Loopback0') is rejected. Emit the 'interface'
+        keyword for interface-name inputs and pass IP literals through
+        unchanged.
+        """
+        v = (value or '').strip()
+        if self._is_ip_literal(v):
+            return f'{indent}update-source {v}'
+        canonical = self._canonicalize_source_interface(v)
+        return f'{indent}update-source interface {canonical}'
+
     def _canonicalize_source_interface(self, name: str) -> str:
         """Normalize a source-interface or update-source value to EAS-accepted case.
 
@@ -90,11 +126,24 @@ class SonicConfigGenerator:
 
         # Hostname + interface-naming standard (inside the same configure-terminal session)
         if self.migrator.hostname:
-            # HW-1: EAS has no 'spanning-tree enable'. Valid sub-keyword is
-            # 'spanning-tree mode <rstp|mstp|pvst>'. Default to 'rstp' when the
-            # source config had no explicit mode (rapid spanning-tree is the
+            # HW-1/HW-7: EAS has no 'spanning-tree enable'. The valid
+            # sub-keyword is 'spanning-tree mode <mst|pvst|rapid-pvst>'.
+            # EAS does NOT accept 'rstp' or 'mstp' (round-2 hardware
+            # validation, hw-validation/HW_VALIDATION_REPORT_V2.md).
+            # Normalize any source keyword and default to 'rapid-pvst' when
+            # the source had no explicit mode (rapid spanning-tree is the
             # safest enable form for a migrated config).
-            stp_mode = getattr(self.migrator, 'stp_mode', '') or 'rstp'
+            raw_mode = (getattr(self.migrator, 'stp_mode', '') or '').strip().lower()
+            stp_mode_map = {
+                'rstp': 'rapid-pvst',
+                'rapid-pvst': 'rapid-pvst',
+                'mstp': 'mst',
+                'mst': 'mst',
+                'pvst': 'pvst',
+                'pvst+': 'pvst',
+                'rapid-pvst+': 'rapid-pvst',
+            }
+            stp_mode = stp_mode_map.get(raw_mode, 'rapid-pvst')
             # Interface-naming standard requires exiting and re-entering sonic-cli
             # before the new mode is honored by the parser (confirmed on live EAS
             # 2026-04-16). Split the session with a clear paste boundary so the
@@ -498,29 +547,45 @@ class SonicConfigGenerator:
             # Special handling for interfaces with channel-groups
             if intf_config.channel_group:
                 # For channel-group interfaces: speed, mtu, fec, description, channel-group, no shutdown, and LLDP
-                
+
                 # Add speed if present
                 if intf_config.speed:
                     # Convert speed format: "forced 1G" -> "1000", "forced 10G" -> "10000", etc.
                     speed_value = self._normalize_speed(intf_config.speed)
                     if speed_value:
                         config_lines.append(f'  speed {speed_value}')
-                
-                # Emit MTU only when source had explicit "mtu X" (avoid adding MTU to interfaces that didn't have it)
-                if intf_config.mtu_configured:
+
+                # HW-9: EAS rejects 'channel-group <N>' when the member port
+                # MTU does not match the parent PortChannel MTU
+                # ("% Error: Configuration not allowed when port MTU not
+                # same as portchannel MTU"). NX-OS / EOS inherit member
+                # MTU implicitly; EAS does not. Cross-reference the
+                # parent PortChannel's explicit MTU and emit a matching
+                # 'mtu <pc_mtu>' BEFORE 'channel-group <N>' so the
+                # channel-group binding is accepted.
+                pc_id = str(intf_config.channel_group)
+                pc_cfg = (self.migrator.port_channels or {}).get(pc_id)
+                pc_mtu_emitted = False
+                if pc_cfg is not None and getattr(pc_cfg, 'mtu_configured', False):
+                    config_lines.append(f'  mtu {pc_cfg.mtu}')
+                    pc_mtu_emitted = True
+
+                # Emit member-port MTU only when source had explicit "mtu X"
+                # AND we have not already emitted a parent-derived MTU above.
+                if intf_config.mtu_configured and not pc_mtu_emitted:
                     config_lines.append(f'  mtu {intf_config.mtu}')
-                
+
                 # Add FEC configuration if present (stays on Eth interface, not PortChannel)
                 if intf_config.fec and intf_config.fec != 'auto':
                     config_lines.append(f'  {intf_config.fec}')
-                
+
                 # Add description if present
                 if intf_config.description:
                     config_lines.append(f'  description {self._quote_description(intf_config.description)}')
-                
+
                 # Add channel-group (always for channel-group interfaces)
                 config_lines.append(f'  channel-group {intf_config.channel_group}')
-                
+
                 # Add no shutdown (always for channel-group interfaces)
                 config_lines.append('  no shutdown')
             else:
@@ -1056,7 +1121,8 @@ class SonicConfigGenerator:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(member["neighbor"])
                 if update_source:
                     # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
-                    config_lines.append(f'  update-source {self._canonicalize_source_interface(update_source)}')
+                    # HW-10: emit 'interface' keyword for interface-name source
+                    config_lines.append(self._emit_update_source(update_source))
             
             # Route-maps on neighbor
             if 'neighbor_route_map_in' in self.migrator.bgp_config:
@@ -1081,7 +1147,8 @@ class SonicConfigGenerator:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(neighbor_ip)
                 if update_source:
                     # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
-                    config_lines.append(f'  update-source {self._canonicalize_source_interface(update_source)}')
+                    # HW-10: emit 'interface' keyword for interface-name source
+                    config_lines.append(self._emit_update_source(update_source))
             if 'neighbor_multihop' in self.migrator.bgp_config:
                 multihop = self.migrator.bgp_config['neighbor_multihop'].get(neighbor_ip)
                 if multihop:

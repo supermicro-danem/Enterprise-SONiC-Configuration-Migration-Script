@@ -20,7 +20,7 @@ sonic-cli
 !
 configure terminal
 !
-spanning-tree mode rstp
+spanning-tree mode rapid-pvst
 !
 username admin password CHANGE_ME_PLACEHOLDER role admin
 !
@@ -113,11 +113,13 @@ interface Eth 1/6
 exit
 !
 interface Eth 1/7
+  mtu 9000
   channel-group 1
   no shutdown
 exit
 !
 interface Eth 1/8
+  mtu 9000
   channel-group 1
   no shutdown
 exit

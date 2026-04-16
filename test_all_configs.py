@@ -232,29 +232,113 @@ def _compare_output_to_golden(output_path: str, golden_path: str):
 
 
 def run_hw_regression_assertions(output_dir: str):
-    """HW-3/HW-4 defensive assertion: every 'interface range ...' line emitted
-    by the generator must use the 'Eth' keyword (not 'Ethernet'). On EAS with
+    """Hardware-validated IS-CLI regression assertions.
+
+    HW-3/HW-4: every 'interface range ...' line emitted by the generator
+    must use the 'Eth' keyword (not 'Ethernet'). On EAS with
     'interface-naming standard', the range form is 'interface range Eth
-    <slot/port-slot/port>'; 'Ethernet' is rejected by the parser and poisons
-    the entire paste session (see hw-validation/HW_VALIDATION_REPORT.md,
-    HW-3/HW-4). This check ensures a future regression in any per-vendor
-    parser cannot reintroduce the stale form.
+    <slot/port-slot/port>'; 'Ethernet' is rejected by the parser and
+    poisons the entire paste session.
+
+    HW-7: 'spanning-tree mode' must use one of the EAS-accepted keywords
+    (mst | pvst | rapid-pvst). EAS rejects 'rstp' and 'mstp'.
+
+    HW-9: every 'channel-group <N>' line must be preceded (within the
+    same interface block) by a matching 'mtu <pc_mtu>' line whenever the
+    referenced PortChannel block declared an explicit MTU. EAS rejects
+    'channel-group' when member-port MTU does not equal PortChannel MTU.
+
+    HW-10: every 'update-source' line emitted on a BGP neighbor must be
+    followed by either the keyword 'interface' (for interface-name
+    sources) or an IP literal. A bare interface token is rejected by EAS.
+
     Returns a list of (file_path, line_number, line_text) violations.
+    See hw-validation/HW_VALIDATION_REPORT.md and
+    hw-validation/HW_VALIDATION_REPORT_V2.md.
     """
     import re as _re
     violations = []
-    bad = _re.compile(r'^\s*interface\s+range\s+Ethernet\b', _re.IGNORECASE)
+    bad_range = _re.compile(r'^\s*interface\s+range\s+Ethernet\b', _re.IGNORECASE)
+    bad_stp = _re.compile(r'^\s*spanning-tree\s+mode\s+(rstp|mstp)\b', _re.IGNORECASE)
+    update_source = _re.compile(r'^\s*update-source\s+(\S+)(?:\s+(\S+))?')
+    ip_literal = _re.compile(r'^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:]*)$')
+    pc_block_start = _re.compile(r'^\s*interface\s+PortChannel\s+(\S+)', _re.IGNORECASE)
+    eth_block_start = _re.compile(r'^\s*interface\s+(?:Eth|Ethernet)\b', _re.IGNORECASE)
+    mtu_line = _re.compile(r'^\s*mtu\s+(\d+)\s*$', _re.IGNORECASE)
+    cg_line = _re.compile(r'^\s*channel-group\s+(\S+)\s*$', _re.IGNORECASE)
+    block_end = _re.compile(r'^\s*exit\s*$', _re.IGNORECASE)
+
     for fname in sorted(os.listdir(output_dir)):
         if not fname.endswith('_sonic.txt'):
             continue
         fpath = os.path.join(output_dir, fname)
         try:
             with open(fpath, 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f, start=1):
-                    if bad.match(line):
-                        violations.append((fpath, i, line.rstrip('\n')))
+                lines = f.readlines()
         except OSError:
-            pass
+            continue
+
+        # Pass 1: collect PortChannel ID -> explicit MTU map (None when no explicit MTU).
+        pc_mtu = {}
+        in_pc = None
+        in_pc_mtu = None
+        for ln in lines:
+            m = pc_block_start.match(ln)
+            if m:
+                in_pc = m.group(1)
+                in_pc_mtu = None
+                continue
+            if in_pc is not None:
+                if block_end.match(ln):
+                    pc_mtu[in_pc] = in_pc_mtu
+                    in_pc = None
+                    in_pc_mtu = None
+                    continue
+                mm = mtu_line.match(ln)
+                if mm:
+                    try:
+                        in_pc_mtu = int(mm.group(1))
+                    except ValueError:
+                        pass
+
+        # Pass 2: per-line and per-block checks.
+        in_eth_block = False
+        eth_block_mtu = None
+        for i, line in enumerate(lines, start=1):
+            if bad_range.match(line):
+                violations.append((fpath, i, line.rstrip('\n')))
+            if bad_stp.match(line):
+                violations.append((fpath, i, line.rstrip('\n')))
+            us = update_source.match(line)
+            if us:
+                first = us.group(1)
+                # HW-10: first token must be 'interface' OR an IP literal.
+                if first.lower() != 'interface' and not ip_literal.match(first):
+                    violations.append((fpath, i, line.rstrip('\n')))
+            if eth_block_start.match(line):
+                in_eth_block = True
+                eth_block_mtu = None
+                continue
+            if in_eth_block:
+                if block_end.match(line):
+                    in_eth_block = False
+                    eth_block_mtu = None
+                    continue
+                mm = mtu_line.match(line)
+                if mm:
+                    try:
+                        eth_block_mtu = int(mm.group(1))
+                    except ValueError:
+                        pass
+                cg = cg_line.match(line)
+                if cg:
+                    pc_id = cg.group(1)
+                    expected = pc_mtu.get(pc_id)
+                    # HW-9: if the parent PortChannel had an explicit MTU,
+                    # the member-port block must emit a matching MTU line
+                    # before 'channel-group'.
+                    if expected is not None and eth_block_mtu != expected:
+                        violations.append((fpath, i, line.rstrip('\n')))
     return violations
 
 
@@ -384,20 +468,21 @@ def main():
                         stderr_preview += "..."
                     print(f"  Stderr: {stderr_preview}")
 
-    # HW-3/HW-4 defensive regression check: no 'interface range Ethernet ...'
-    # should ever be emitted. This runs before the golden diff so a regression
-    # is flagged distinctly from a golden-drift.
+    # Hardware-validated IS-CLI regression checks (HW-3/HW-4 range keyword;
+    # HW-7 spanning-tree mode; HW-9 LAG member MTU; HW-10 update-source
+    # interface keyword). Runs before the golden diff so a regression is
+    # flagged distinctly from a golden-drift.
     print(f"\n{'='*70}")
-    print("HW REGRESSION ASSERTIONS (interface range Eth keyword)")
+    print("HW REGRESSION ASSERTIONS (HW-3/HW-4/HW-7/HW-9/HW-10)")
     print(f"{'='*70}")
     hw_violations = run_hw_regression_assertions(OUTPUT_DIR)
     if hw_violations:
-        print(f"FAIL: {len(hw_violations)} 'interface range Ethernet ...' line(s) found:")
+        print(f"FAIL: {len(hw_violations)} hardware-syntax violation(s) found:")
         for fpath, lineno, text in hw_violations:
             print(f"  {fpath}:{lineno}: {text}")
         print("HW regression check: FAIL")
         sys.exit(1)
-    print("No 'interface range Ethernet' emissions found.")
+    print("No hardware-syntax violations found.")
     print("HW regression check: PASS")
 
     # FR-8: golden-file diff. Either overwrite or verify.

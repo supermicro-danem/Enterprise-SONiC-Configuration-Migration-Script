@@ -20,7 +20,7 @@ sonic-cli
 !
 configure terminal
 !
-spanning-tree mode rstp
+spanning-tree mode rapid-pvst
 !
 ip vrf mgmt
 !
@@ -160,12 +160,14 @@ interface Eth 1/3
 exit
 !
 interface Eth 1/4
+  mtu 9000
   description "Port-Channel-Member"
   channel-group 10
   no shutdown
 exit
 !
 interface Eth 1/5
+  mtu 9000
   description "Port-Channel-Member"
   channel-group 10
   no shutdown
@@ -222,11 +224,11 @@ router bgp 65001
  neighbor 10.10.10.1
   remote-as 65002
   description "BGP-Peer-01"
-  update-source Loopback0
+  update-source interface Loopback0
  neighbor 10.10.10.2
   remote-as 65002
   description "BGP-Peer-02"
-  update-source Loopback0
+  update-source interface Loopback0
  neighbor 10.10.10.3
   remote-as 65003
   description "BGP-Peer-03"

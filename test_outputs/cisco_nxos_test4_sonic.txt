@@ -20,7 +20,7 @@ sonic-cli
 !
 configure terminal
 !
-spanning-tree mode rstp
+spanning-tree mode rapid-pvst
 !
 username admin password CHANGE_ME_PLACEHOLDER role admin
 username operator password CHANGE_ME_PLACEHOLDER role network-operator
@@ -146,12 +146,14 @@ interface Eth 1/9
 exit
 !
 interface Eth 1/10
+  mtu 9000
   description "Port-Channel-50-Member-01"
   channel-group 50
   no shutdown
 exit
 !
 interface Eth 1/11
+  mtu 9000
   description "Port-Channel-50-Member-02"
   channel-group 50
   no shutdown

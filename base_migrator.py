@@ -209,9 +209,12 @@ class BaseMigrator(ABC):
     def reset_state(self):
         """Reset parser state for new configuration"""
         self.hostname = ""
-        # HW-1: spanning-tree mode detected from source config (one of: 'rstp',
-        # 'mstp', 'pvst', or '' when not explicitly set). Generator defaults to
-        # 'rstp' when STP is to be enabled but no mode was parsed.
+        # HW-1/HW-7: spanning-tree mode as it appeared in the source config
+        # (free-form lowercase string, e.g. 'rstp', 'mstp', 'rapid-pvst',
+        # 'mst', 'pvst', or '' when not explicitly set). The generator
+        # normalizes this to the EAS-accepted set ('rapid-pvst' | 'mst' |
+        # 'pvst') and defaults to 'rapid-pvst' when no mode was parsed.
+        # EAS does NOT accept 'rstp' or 'mstp' as keywords.
         self.stp_mode: str = ""
         self.management_ip = ""
         self.management_mask = ""

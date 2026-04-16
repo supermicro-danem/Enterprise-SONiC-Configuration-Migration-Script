@@ -171,16 +171,13 @@ class AristaEOSMigrator(BaseMigrator):
         elif line.startswith('snmp-server community'):
             self._parse_snmp_community(line)
         elif line.startswith('spanning-tree mode '):
-            # HW-1: EOS supports 'mstp', 'rapid-pvst', 'rstp'. Normalize to EAS keywords.
+            # HW-1/HW-7: EOS supports 'mstp', 'rapid-pvst', 'rstp'. Record
+            # the source-config keyword; the generator normalization map
+            # translates it to the EAS-accepted form
+            # (rapid-pvst | mst | pvst).
             parts = line.split()
             if len(parts) >= 3:
-                src_mode = parts[2].lower()
-                if src_mode in ('rstp', 'rapid-pvst'):
-                    self.stp_mode = 'rstp'
-                elif src_mode in ('mstp', 'mst'):
-                    self.stp_mode = 'mstp'
-                elif src_mode == 'pvst':
-                    self.stp_mode = 'pvst'
+                self.stp_mode = parts[2].lower()
         elif line.startswith('ip name-server'):
             # EOS: ip name-server [vrf <name>] <ip> or multiple IPs per line
             parts = line.split()
