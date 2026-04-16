@@ -6,8 +6,21 @@ configure terminal
 !
 hostname DC-Access-VRR-Cumulus-01
 interface-naming standard
+end
+exit
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
+sonic-cli
 !
-spanning-tree enable
+configure terminal
+!
+spanning-tree mode rstp
 !
 username admin password CHANGE_ME_PLACEHOLDER role admin
 !
@@ -26,7 +39,7 @@ ntp server 10.1.1.1
 ip name-server source-interface Management 0
 ip name-server 8.8.8.8
 !
-snmp-server community public ro
+snmp-server community public
 !
 ! VRR (Cumulus Linux) is active/active; SONiC VRRP is active/standby.
 ! Review VRRP priority and preempt to match desired failover behavior.

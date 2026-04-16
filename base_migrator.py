@@ -209,6 +209,10 @@ class BaseMigrator(ABC):
     def reset_state(self):
         """Reset parser state for new configuration"""
         self.hostname = ""
+        # HW-1: spanning-tree mode detected from source config (one of: 'rstp',
+        # 'mstp', 'pvst', or '' when not explicitly set). Generator defaults to
+        # 'rstp' when STP is to be enabled but no mode was parsed.
+        self.stp_mode: str = ""
         self.management_ip = ""
         self.management_mask = ""
         self.management_gateway = ""

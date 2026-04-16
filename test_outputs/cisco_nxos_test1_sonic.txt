@@ -6,8 +6,21 @@ configure terminal
 !
 hostname DC-Edge-Switch-01
 interface-naming standard
+end
+exit
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
+sonic-cli
 !
-spanning-tree enable
+configure terminal
+!
+spanning-tree mode rstp
 !
 ip vrf mgmt
 !
@@ -15,9 +28,9 @@ interface Management 0
   ip address 192.168.200.254/24 gwaddr 192.168.200.2
 exit
 !
-username admin password testpass123 role admin
-username operator password testpass123 role network-operator
-username guest password testpass123 role network-operator
+username admin password CHANGE_ME_PLACEHOLDER role admin
+username operator password CHANGE_ME_PLACEHOLDER role network-operator
+username guest password CHANGE_ME_PLACEHOLDER role network-operator
 !
 interface PortChannel 10 mode active
   mtu 9000
@@ -58,14 +71,14 @@ ip name-server source-interface Management 0
 ip name-server 1.1.1.1
 ip name-server 1.0.0.1
 !
-radius-server host 10.3.3.1 key testkey123 retransmit 2 timeout 5
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 2 timeout 5
 !
 aaa authentication login default group radius local
 aaa authentication login console local
 !
-snmp-server community public ro
+snmp-server community public
 !
-snmp-server community private rw
+snmp-server community private
 !
 interface vlan 1
   description "default"
@@ -210,11 +223,11 @@ router bgp 65010
  neighbor 10.10.10.1
   remote-as 65001
   description "Core-Router-01"
-  update-source loopback0
+  update-source Loopback0
  neighbor 10.10.10.2
   remote-as 65001
   description "Core-Router-02"
-  update-source loopback0
+  update-source Loopback0
   ebgp-multihop 5
 exit
 !

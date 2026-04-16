@@ -6,10 +6,23 @@ configure terminal
 !
 hostname QFX-Spine-Switch-01
 interface-naming standard
+end
+exit
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
+sonic-cli
 !
-spanning-tree enable
+configure terminal
 !
-username admin password testpass123 role admin
+spanning-tree mode rstp
+!
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 100 mode active
   description "Spine-to-Spine-LAG"

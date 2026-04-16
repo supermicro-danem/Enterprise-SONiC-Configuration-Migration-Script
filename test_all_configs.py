@@ -231,6 +231,33 @@ def _compare_output_to_golden(output_path: str, golden_path: str):
     return False, ''.join(diff[:30])
 
 
+def run_hw_regression_assertions(output_dir: str):
+    """HW-3/HW-4 defensive assertion: every 'interface range ...' line emitted
+    by the generator must use the 'Eth' keyword (not 'Ethernet'). On EAS with
+    'interface-naming standard', the range form is 'interface range Eth
+    <slot/port-slot/port>'; 'Ethernet' is rejected by the parser and poisons
+    the entire paste session (see hw-validation/HW_VALIDATION_REPORT.md,
+    HW-3/HW-4). This check ensures a future regression in any per-vendor
+    parser cannot reintroduce the stale form.
+    Returns a list of (file_path, line_number, line_text) violations.
+    """
+    import re as _re
+    violations = []
+    bad = _re.compile(r'^\s*interface\s+range\s+Ethernet\b', _re.IGNORECASE)
+    for fname in sorted(os.listdir(output_dir)):
+        if not fname.endswith('_sonic.txt'):
+            continue
+        fpath = os.path.join(output_dir, fname)
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                for i, line in enumerate(f, start=1):
+                    if bad.match(line):
+                        violations.append((fpath, i, line.rstrip('\n')))
+        except OSError:
+            pass
+    return violations
+
+
 def run_golden_diff(output_dir: str, goldens_dir: str):
     """Compare every *_sonic.txt and *_sonic.report.txt in output_dir against
     goldens_dir. Returns (matches: int, mismatches: list of tuples)."""
@@ -356,6 +383,22 @@ def main():
                     if len(result['stderr']) > 300:
                         stderr_preview += "..."
                     print(f"  Stderr: {stderr_preview}")
+
+    # HW-3/HW-4 defensive regression check: no 'interface range Ethernet ...'
+    # should ever be emitted. This runs before the golden diff so a regression
+    # is flagged distinctly from a golden-drift.
+    print(f"\n{'='*70}")
+    print("HW REGRESSION ASSERTIONS (interface range Eth keyword)")
+    print(f"{'='*70}")
+    hw_violations = run_hw_regression_assertions(OUTPUT_DIR)
+    if hw_violations:
+        print(f"FAIL: {len(hw_violations)} 'interface range Ethernet ...' line(s) found:")
+        for fpath, lineno, text in hw_violations:
+            print(f"  {fpath}:{lineno}: {text}")
+        print("HW regression check: FAIL")
+        sys.exit(1)
+    print("No 'interface range Ethernet' emissions found.")
+    print("HW regression check: PASS")
 
     # FR-8: golden-file diff. Either overwrite or verify.
     if args.update_goldens:

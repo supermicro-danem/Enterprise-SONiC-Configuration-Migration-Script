@@ -6,8 +6,21 @@ configure terminal
 !
 hostname QFX-Switch-01
 interface-naming standard
+end
+exit
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
+sonic-cli
 !
-spanning-tree enable
+configure terminal
+!
+spanning-tree mode rstp
 !
 ip vrf mgmt
 !
@@ -15,7 +28,7 @@ interface Management 0
   ip address 192.168.10.1/24 gwaddr 192.168.10.254
 exit
 !
-username admin password testpass123 role admin
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 10 mode active
   description "Uplink-PortChannel"
@@ -62,14 +75,14 @@ ip name-server source-interface Management 0
 ip name-server 8.8.8.8
 ip name-server 8.8.4.4
 !
-radius-server host 10.3.3.1 key testkey123 retransmit 3 timeout 10
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 3 timeout 10
 !
 aaa authentication login default group radius local
 aaa authentication login console local
 !
-snmp-server community public ro
+snmp-server community public
 !
-snmp-server community private rw
+snmp-server community private
 !
 interface vlan 1
   description "default"

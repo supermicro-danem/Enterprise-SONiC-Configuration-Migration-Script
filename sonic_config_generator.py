@@ -30,6 +30,27 @@ class SonicConfigGenerator:
         if s.startswith('"') and s.endswith('"'):
             return s
         return f'"{s}"'
+
+    def _canonicalize_source_interface(self, name: str) -> str:
+        """Normalize a source-interface or update-source value to EAS-accepted case.
+
+        HW-5: EAS IS-CLI is case-sensitive on interface names used as values
+        to 'update-source' (and similar 'source-interface' contexts). Source
+        parsers may emit lowercase 'loopback0' (NX-OS) or the abbreviated
+        Cumulus form 'lo'; EAS expects 'Loopback0' (capital L). Apply the
+        canonical form here so callers do not have to remember the rule.
+        """
+        if not name:
+            return name
+        val = str(name).strip()
+        # Cumulus abbreviation: 'lo' -> 'Loopback0'
+        if val.lower() == 'lo':
+            return 'Loopback0'
+        # Loopback normalization: match 'loopback<N>' or 'Loopback<N>' in any case
+        m = re.match(r'^loopback(\d+)$', val, re.IGNORECASE)
+        if m:
+            return f'Loopback{m.group(1)}'
+        return val
     
     def generate_sonic_config(self, user_inputs: Dict[str, str]) -> str:
         """Generate SONiC configuration from parsed data.
@@ -69,11 +90,33 @@ class SonicConfigGenerator:
 
         # Hostname + interface-naming standard (inside the same configure-terminal session)
         if self.migrator.hostname:
+            # HW-1: EAS has no 'spanning-tree enable'. Valid sub-keyword is
+            # 'spanning-tree mode <rstp|mstp|pvst>'. Default to 'rstp' when the
+            # source config had no explicit mode (rapid spanning-tree is the
+            # safest enable form for a migrated config).
+            stp_mode = getattr(self.migrator, 'stp_mode', '') or 'rstp'
+            # Interface-naming standard requires exiting and re-entering sonic-cli
+            # before the new mode is honored by the parser (confirmed on live EAS
+            # 2026-04-16). Split the session with a clear paste boundary so the
+            # interface commands that follow run under the new naming mode.
             config_lines.extend([
                 f'hostname {self.migrator.hostname}',
                 'interface-naming standard',
+                'end',
+                'exit',
+                '! ============================================================',
+                '! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.',
+                '! interface-naming standard takes effect only on a fresh',
+                '! sonic-cli session. In the Linux shell run:',
+                '!   exit',
+                '!   sonic-cli',
+                '! Then resume pasting below.',
+                '! ============================================================',
+                'sonic-cli',
                 '!',
-                'spanning-tree enable',
+                'configure terminal',
+                '!',
+                f'spanning-tree mode {stp_mode}',
                 '!'
             ])
         
@@ -353,6 +396,13 @@ class SonicConfigGenerator:
             alt = self.migrator.convert_interface_name('range ' + range_spec)
             if alt.startswith('range '):
                 return alt
+        # HW-3/HW-4 defensive: EAS 'interface-naming standard' mode uses 'Eth'
+        # (not 'Ethernet') inside range specs. Any 'range Ethernet' that leaks
+        # through parser changes is normalized to the canonical 'range Eth' so
+        # a regression in a per-vendor parser cannot reintroduce the cascade
+        # failure observed on SSE-T8164.
+        if re.match(r'^range\s+Ethernet\b', sonic_range, re.IGNORECASE):
+            sonic_range = re.sub(r'^range\s+Ethernet\s*', 'range Eth ', sonic_range, count=1, flags=re.IGNORECASE)
         return sonic_range
 
     def _is_portchannel_range(self, range_spec: str) -> bool:
@@ -579,7 +629,10 @@ class SonicConfigGenerator:
                 config_lines.append(f'  mclag {mclag_domain}')
         
         if po_config.spanning_tree_disable:
-            config_lines.append('  no spanning-tree enable')
+            # HW-1 defensive: EAS per-interface STP-disable keyword is 'no spanning-tree'
+            # (no 'enable' trailing keyword exists). Keep emission minimal and
+            # hardware-valid.
+            config_lines.append('  no spanning-tree')
         
         config_lines.append('exit')
         config_lines.append('!')
@@ -1002,7 +1055,8 @@ class SonicConfigGenerator:
             if 'neighbor_update_source' in self.migrator.bgp_config:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(member["neighbor"])
                 if update_source:
-                    config_lines.append(f'  update-source {update_source}')
+                    # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
+                    config_lines.append(f'  update-source {self._canonicalize_source_interface(update_source)}')
             
             # Route-maps on neighbor
             if 'neighbor_route_map_in' in self.migrator.bgp_config:
@@ -1026,7 +1080,8 @@ class SonicConfigGenerator:
             if 'neighbor_update_source' in self.migrator.bgp_config:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(neighbor_ip)
                 if update_source:
-                    config_lines.append(f'  update-source {update_source}')
+                    # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
+                    config_lines.append(f'  update-source {self._canonicalize_source_interface(update_source)}')
             if 'neighbor_multihop' in self.migrator.bgp_config:
                 multihop = self.migrator.bgp_config['neighbor_multihop'].get(neighbor_ip)
                 if multihop:
@@ -1161,8 +1216,13 @@ class SonicConfigGenerator:
             return
         
         for community_name, permission in self.migrator.snmp_config.communities.items():
-            # Enterprise SONiC syntax: snmp-server community <name> [ro|rw]
+            # HW-2: EAS IS-CLI does not accept a trailing 'ro'/'rw' keyword on
+            # 'snmp-server community'. The valid form is
+            # 'snmp-server community <name> [group <group-name>]'. Drop the
+            # permission keyword. RO/RW distinction via ACL-backed groups is a
+            # follow-on item (file separately when required).
+            _ = permission  # retained in parser for future group mapping
             config_lines.extend([
-                f'snmp-server community {community_name} {permission}',
+                f'snmp-server community {community_name}',
                 '!'
             ])

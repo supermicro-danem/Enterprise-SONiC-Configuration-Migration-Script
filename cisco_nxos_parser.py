@@ -186,6 +186,18 @@ class CiscoNXOSMigrator(BaseMigrator):
         
         elif line.startswith('snmp-server community'):
             self._parse_snmp_community(line)
+
+        elif line.startswith('spanning-tree mode '):
+            # HW-1: NX-OS supports 'rapid-pvst', 'mst'. Map to EAS keywords.
+            parts = line.split()
+            if len(parts) >= 3:
+                src_mode = parts[2].lower()
+                if src_mode in ('rstp', 'rapid-pvst'):
+                    self.stp_mode = 'rstp'
+                elif src_mode in ('mst', 'mstp'):
+                    self.stp_mode = 'mstp'
+                elif src_mode == 'pvst':
+                    self.stp_mode = 'pvst'
         
         elif line.startswith('ip name-server'):
             # DNS: ip name-server <ip> [<ip> ...] (NX-OS typically no VRF)
