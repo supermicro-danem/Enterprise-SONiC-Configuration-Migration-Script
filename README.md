@@ -173,7 +173,8 @@ The migration will proceed with supported features, and unsupported ones will be
 │   ├── arista_eos_sample.txt, arista_eos_test1-3.txt
 │   ├── juniper_qfx_sample.txt, juniper_qfx_test1-3.txt
 │   └── cumulus_nclu_test1.txt, cumulus_nclu_test2.txt, cumulus_nclu_test3.txt
-└── test_outputs/                  # Generated SONiC configs and reports
+├── test_outputs/                  # Generated SONiC configs and reports
+└── test_goldens/                  # Committed baseline for regression diff
 ```
 
 ## Testing
@@ -184,7 +185,32 @@ Run the automated test suite to validate all configurations:
 python3 test_all_configs.py
 ```
 
-This will test all sample configurations (16 total: 5 Cisco, 4 Arista, 4 Juniper, 3 Cumulus) and generate a summary report.
+This migrates every sample under `test_configs/` (16 total: 5 Cisco, 4 Arista, 4 Juniper, 3 Cumulus) into `test_outputs/`, prints a per-configuration summary, and then compares each generated `_sonic.txt` and `_sonic.report.txt` byte-for-byte against the matching committed baseline in `test_goldens/`.
+
+### Clean run
+
+A clean run ends with the line `Golden diff check: PASS` and exit code 0. All migrations completed and all outputs matched their committed goldens exactly.
+
+### Golden-diff failure
+
+If any generated output differs from its golden file, the harness prints a unified diff (truncated to the first 30 lines per file) and exits with code 1. A non-zero exit indicates that code changes have altered the generated SONiC configuration for one or more inputs. This is always intentional or a regression; it must never be ignored.
+
+When a golden diff fails at PR-review time, it must be resolved in one of two ways before the goldens are regenerated:
+
+1. Fix the code so that the generated output returns to matching the committed golden, or
+2. Obtain an explicit sign-off from the PR reviewer that the new output is the correct behavior for this change.
+
+Regenerating goldens without one of those two outcomes is not acceptable and will mask regressions.
+
+### Regenerating goldens
+
+Once a diff has been approved (option 2 above), refresh the committed baseline with:
+
+```bash
+python3 test_all_configs.py --update-goldens
+```
+
+The `--update-goldens` flag re-runs all migrations and then copies every `_sonic.txt` and `_sonic.report.txt` from `test_outputs/` into `test_goldens/`, overwriting the previous baseline. Commit the updated `test_goldens/` files together with the code change that produced them, in the same PR, so that reviewers see both halves of the contract.
 
 ## Configuration File Formats
 

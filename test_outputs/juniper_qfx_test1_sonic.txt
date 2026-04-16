@@ -1,25 +1,18 @@
-! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.
-! You can then copy/paste the configuration commands below in sections.
+! Enter the SONiC CLI shell, then paste the commands below.
+! They form one atomic configure-terminal session.
 sonic-cli
 !
 configure terminal
 !
 hostname QFX-Leaf-Switch-01
 interface-naming standard
-write memory
-!
-exit
-!
-! Exit sonic-cli and re-enter to apply interface-naming standard changes.
-sonic-cli
-!
-configure terminal
 !
 spanning-tree enable
 !
 ip vrf mgmt
+!
 interface Management 0
-ip address 192.168.10.1/24 gwaddr 192.168.10.254
+  ip address 192.168.10.1/24 gwaddr 192.168.10.254
 exit
 !
 username admin password testpass123 role admin
@@ -30,8 +23,10 @@ interface PortChannel 10 mode active
 exit
 !
 mclag domain 99
-source-ip 192.168.10.1
-peer-ip 192.168.10.2
+  source-ip 192.168.10.1
+  peer-ip 192.168.10.2
+exit
+!
 !
 logging server 10.2.2.1
 !
@@ -55,64 +50,77 @@ interface vlan 10
   description "Management network VLAN"
   ip address 192.168.10.1/24
 exit
+!
 interface vlan 20
   description "Server network VLAN"
   ip address 192.168.20.1/24
 exit
+!
 interface vlan 30
   description "Storage network VLAN"
   ip address 192.168.30.1/24
 exit
+!
 interface vlan 40
   description "DMZ network VLAN"
   ip address 192.168.40.1/24
 exit
+!
 !
 interface Eth 1/0
   description "Uplink-to-Spine-01"
   switchport trunk allowed vlan 10,20,30,40
   no shutdown
 exit
+!
 interface Eth 1/1
   description "Uplink-to-Spine-02"
   switchport trunk allowed vlan 10,20,30,40
   no shutdown
 exit
+!
 interface Eth 1/2
   description "Server-Farm-01"
   switchport access vlan 20
   no shutdown
 exit
+!
 interface Eth 1/3
   description "Server-Farm-02"
   switchport access vlan 20
   no shutdown
 exit
+!
 interface Eth 1/4
   description "Storage-Array-01"
   switchport access vlan 30
   no shutdown
 exit
+!
 interface Eth 1/5
   description "Storage-Array-02"
   switchport access vlan 30
   no shutdown
 exit
+!
 interface Eth 1/6
   description "Port-Channel-10-Member-01"
   channel-group 10
   no shutdown
 exit
+!
 interface Eth 1/7
   description "Port-Channel-10-Member-02"
   channel-group 10
   no shutdown
 exit
 !
+!
 interface lo0
   description "Router-ID-Loopback"
   ip address 10.0.0.1/32
 exit
+!
 !
 ip route 0.0.0.0/0 192.168.10.254
 !

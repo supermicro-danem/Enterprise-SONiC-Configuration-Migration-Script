@@ -1,0 +1,50 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cisco_nxos_sample.txt
+Output file: test_outputs\cisco_nxos_sample_sonic.txt
+Hostname: NX-OS-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 4
+Physical Interfaces: 8
+Port-Channels: 9
+Loopback Interfaces: 1
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: True
+
+Unsupported Features:
+==================================================
+
+  - version 9.3(5) (line 3) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature telnet (line 6) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ssh (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature bgp (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature vpc (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature lldp (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip domain-lookup (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+vpc domain 1
+  - peer-gateway (line 170) - Configuration not translated; configure manually on SONiC if needed.
+
+vpc domain 1
+  - auto-recovery (line 171) - Configuration not translated; configure manually on SONiC if needed.
+
+line vty
+  - session-limit 10 (line 202) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

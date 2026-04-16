@@ -1,0 +1,121 @@
+! Enter the SONiC CLI shell, then paste the commands below.
+! They form one atomic configure-terminal session.
+sonic-cli
+!
+configure terminal
+!
+hostname Campus-Access-Switch-01
+interface-naming standard
+!
+spanning-tree enable
+!
+username admin password y role admin
+!
+interface PortChannel 1 mode active
+  mtu 9000
+  description "Uplink-LAG"
+  switchport trunk allowed vlan 100,200,300
+exit
+!
+!
+logging server 10.2.2.1
+!
+ntp server 10.1.1.1
+!
+! DNS server configuration (Enterprise SONiC 5.18)
+ip name-server source-interface Management 0
+ip name-server 8.8.8.8
+!
+snmp-server community public ro
+!
+interface vlan 1
+  description "default"
+exit
+!
+interface vlan 100
+  description "Users-VLAN-Interface"
+  ip address 192.168.100.1/24
+exit
+!
+interface vlan 200
+  description "Voice-VLAN-Interface"
+  ip address 192.168.200.1/24
+exit
+!
+interface vlan 300
+  description "Guest-VLAN-Interface"
+  ip address 192.168.3.1/24
+exit
+!
+!
+interface Eth 1/1
+  mtu 1500
+  description "Access-Port-01"
+  switchport access vlan 100
+  no shutdown
+exit
+!
+interface Eth 1/2
+  mtu 1500
+  description "Access-Port-02"
+  switchport access vlan 100
+  no shutdown
+exit
+!
+interface Eth 1/3
+  mtu 1500
+  description "Voice-Port-01"
+  switchport access vlan 100
+  switchport trunk allowed vlan 100,200
+  no shutdown
+exit
+!
+interface Eth 1/4
+  mtu 1500
+  description "Voice-Port-02"
+  switchport access vlan 100
+  switchport trunk allowed vlan 100,200
+  no shutdown
+exit
+!
+interface Eth 1/5
+  mtu 1500
+  description "Guest-Port-01"
+  switchport access vlan 300
+  no shutdown
+exit
+!
+interface Eth 1/6
+  mtu 9000
+  description "Uplink-to-Distribution"
+  switchport trunk allowed vlan 100,200,300
+  no shutdown
+exit
+!
+interface Eth 1/7
+  description "Port-Channel-1-Member-01"
+  channel-group 1
+  no shutdown
+exit
+!
+interface Eth 1/8
+  description "Port-Channel-1-Member-02"
+  channel-group 1
+  no shutdown
+exit
+!
+!
+ip route 0.0.0.0/0 192.168.100.254
+!
+router bgp 65100
+ router-id 192.168.100.1
+ address-family ipv4 unicast
+ exit
+ neighbor 192.168.100.10
+  remote-as 65000
+  description "Distribution-Switch"
+  ebgp-multihop 2
+exit
+!
+end
+write memory

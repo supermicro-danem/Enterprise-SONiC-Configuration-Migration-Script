@@ -1,0 +1,44 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cisco_nxos_test1.txt
+Output file: test_outputs\cisco_nxos_test1_sonic.txt
+Hostname: DC-Edge-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 5
+Physical Interfaces: 14
+Port-Channels: 3
+Loopback Interfaces: 1
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: True
+
+Unsupported Features:
+==================================================
+
+  - version 9.3(5) (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature telnet (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ssh (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature bgp (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature vpc (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature lldp (line 11) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip domain-lookup (line 17) - Configuration not translated; configure manually on SONiC if needed.
+
+vpc domain 10
+  - role priority 100 (line 204) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

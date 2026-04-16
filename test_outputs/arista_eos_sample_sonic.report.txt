@@ -9,7 +9,7 @@ Statistics:
 ----------------------------------------------------------------------
 VLANs: 4
 Physical Interfaces: 8
-Port-Channels: 5
+Port-Channels: 8
 Loopback Interfaces: 1
 Static Routes: 1
 BGP Configured: True

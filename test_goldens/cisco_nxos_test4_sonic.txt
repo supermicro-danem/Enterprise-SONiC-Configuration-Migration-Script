@@ -1,0 +1,160 @@
+! Enter the SONiC CLI shell, then paste the commands below.
+! They form one atomic configure-terminal session.
+sonic-cli
+!
+configure terminal
+!
+hostname Dist-Switch-01
+interface-naming standard
+!
+spanning-tree enable
+!
+username admin password testpass123 role admin
+username operator password testpass123 role network-operator
+!
+interface PortChannel 50 mode active
+  mtu 9000
+  description "Core-Uplink-LAG"
+  ip address 10.0.0.10/31
+  ! OSPF not translated; configure manually if needed
+exit
+!
+!
+logging server 10.2.2.1
+!
+logging server 10.2.2.2
+!
+ntp server 10.1.1.1 prefer
+!
+ntp server 10.1.1.2
+!
+! DNS server configuration (Enterprise SONiC 5.18)
+ip name-server source-interface Management 0
+ip name-server 8.8.8.8
+ip name-server 8.8.4.4
+!
+snmp-server community public ro
+!
+snmp-server community private rw
+!
+interface vlan 1
+  description "default"
+exit
+!
+interface vlan 500
+  description "Campus-Users-Gateway"
+  ip address 192.168.50.1/24
+exit
+!
+interface vlan 600
+  description "Campus-Servers-Gateway"
+  ip address 192.168.60.1/24
+exit
+!
+interface vlan 700
+  description "Infrastructure-Gateway"
+  ip address 192.168.70.1/24
+exit
+!
+interface vlan 800
+  description "WAN-Transit-Gateway"
+  ip address 192.168.80.1/24
+exit
+!
+!
+interface Eth 1/1
+  mtu 9000
+  description "Access-Switch-01-Uplink"
+  ip address 10.1.1.0/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/2
+  mtu 9000
+  description "Access-Switch-02-Uplink"
+  ip address 10.1.1.2/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/3
+  mtu 9000
+  description "Access-Switch-03-Uplink"
+  ip address 10.1.1.4/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/4
+  mtu 9000
+  description "Access-Switch-04-Uplink"
+  ip address 10.1.1.6/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/5
+  mtu 9000
+  description "Core-Router-01-Uplink"
+  ip address 10.0.0.1/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/6
+  mtu 9000
+  description "Core-Router-02-Uplink"
+  ip address 10.0.0.3/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/7
+  mtu 9000
+  description "WAN-Edge-01"
+  ip address 10.0.0.5/31
+  ! OSPF not translated; configure manually if needed
+  no shutdown
+exit
+!
+interface Eth 1/8
+  mtu 9000
+  description "Server-Trunk-01"
+  switchport trunk allowed vlan 500,600
+  no shutdown
+exit
+!
+interface Eth 1/9
+  mtu 9000
+  description "Server-Trunk-02"
+  switchport trunk allowed vlan 500,600
+  no shutdown
+exit
+!
+interface Eth 1/10
+  description "Port-Channel-50-Member-01"
+  channel-group 50
+  no shutdown
+exit
+!
+interface Eth 1/11
+  description "Port-Channel-50-Member-02"
+  channel-group 50
+  no shutdown
+exit
+!
+!
+interface Loopback0
+  description "Router-ID-Loopback"
+  ip address 10.255.0.1/32
+exit
+!
+interface Loopback1
+  description "TACACS-Source-Loopback"
+  ip address 10.255.1.1/32
+exit
+!
+!
+end
+write memory

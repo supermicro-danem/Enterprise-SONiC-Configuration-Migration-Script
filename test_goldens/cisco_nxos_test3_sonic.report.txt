@@ -1,0 +1,39 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cisco_nxos_test3.txt
+Output file: test_outputs\cisco_nxos_test3_sonic.txt
+Hostname: Spine-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 3
+Physical Interfaces: 6
+Port-Channels: 1
+Loopback Interfaces: 2
+Static Routes: 3
+BGP Configured: True
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - version 9.3(5) (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature telnet (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ssh (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature bgp (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature lldp (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip domain-lookup (line 15) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

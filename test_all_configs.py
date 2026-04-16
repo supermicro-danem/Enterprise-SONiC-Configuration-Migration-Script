@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 """
-Test script to validate migration against all source configuration files
+Test script to validate migration against all source configuration files.
+
+Golden-file diff mode (FR-8):
+  Default behavior: after running every migration, compare the newly generated
+  output in test_outputs/ against the byte-exact snapshot in test_goldens/.
+  Any mismatch is a test failure; the first 30 lines of a unified diff are
+  printed for each failing file. Use --update-goldens to overwrite the
+  goldens with the current outputs (intended for intentional output changes
+  reviewed by a human).
 """
 
+import argparse
+import difflib
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -185,8 +196,94 @@ def run_migration_test(config_file, os_type, output_dir='test_outputs'):
             'error': f"Exception: {str(e)}"
         }
 
+GOLDENS_DIR = 'test_goldens'
+OUTPUT_DIR = 'test_outputs'
+
+
+def _compare_output_to_golden(output_path: str, golden_path: str):
+    """Return (is_match: bool, diff_preview: str) for a single output/golden pair.
+
+    Byte-for-byte comparison. When the two differ, diff_preview is the first
+    30 lines of a unified diff; when they match, diff_preview is empty.
+    """
+    try:
+        with open(output_path, 'rb') as f:
+            out_bytes = f.read()
+    except FileNotFoundError:
+        return False, f"output missing: {output_path}"
+    try:
+        with open(golden_path, 'rb') as f:
+            gold_bytes = f.read()
+    except FileNotFoundError:
+        return False, f"golden missing: {golden_path} (run with --update-goldens to create)"
+
+    if out_bytes == gold_bytes:
+        return True, ''
+
+    out_lines = out_bytes.decode('utf-8', errors='replace').splitlines(keepends=True)
+    gold_lines = gold_bytes.decode('utf-8', errors='replace').splitlines(keepends=True)
+    diff = list(difflib.unified_diff(
+        gold_lines, out_lines,
+        fromfile=golden_path, tofile=output_path, n=3
+    ))
+    return False, ''.join(diff[:30])
+
+
+def run_golden_diff(output_dir: str, goldens_dir: str):
+    """Compare every *_sonic.txt and *_sonic.report.txt in output_dir against
+    goldens_dir. Returns (matches: int, mismatches: list of tuples)."""
+    os.makedirs(goldens_dir, exist_ok=True)
+    pairs = []
+    for fname in sorted(os.listdir(output_dir)):
+        if fname.endswith('_sonic.txt') or fname.endswith('_sonic.report.txt'):
+            pairs.append((os.path.join(output_dir, fname), os.path.join(goldens_dir, fname)))
+    matches = 0
+    mismatches = []
+    for out_path, gold_path in pairs:
+        ok, diff_preview = _compare_output_to_golden(out_path, gold_path)
+        if ok:
+            matches += 1
+        else:
+            mismatches.append((out_path, gold_path, diff_preview))
+    return matches, mismatches
+
+
+def update_goldens(output_dir: str, goldens_dir: str):
+    """Copy every output file into goldens_dir, overwriting existing goldens.
+    Returns the list of changed file paths."""
+    os.makedirs(goldens_dir, exist_ok=True)
+    changed = []
+    for fname in sorted(os.listdir(output_dir)):
+        if not (fname.endswith('_sonic.txt') or fname.endswith('_sonic.report.txt')):
+            continue
+        out_path = os.path.join(output_dir, fname)
+        gold_path = os.path.join(goldens_dir, fname)
+        # Only report a file as changed if its bytes differ from the existing golden.
+        try:
+            with open(out_path, 'rb') as f:
+                out_bytes = f.read()
+            try:
+                with open(gold_path, 'rb') as f:
+                    gold_bytes = f.read()
+            except FileNotFoundError:
+                gold_bytes = None
+            if gold_bytes != out_bytes:
+                changed.append(gold_path)
+        except OSError:
+            pass
+        shutil.copyfile(out_path, gold_path)
+    return changed
+
+
 def main():
     """Run all migration tests"""
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--update-goldens', action='store_true',
+                        help='After migrations run, overwrite test_goldens/ with the current '
+                             'test_outputs/ files. Use this only when the engineer has '
+                             'intentionally changed output and has human-reviewed the diff.')
+    args = parser.parse_args()
+
     print("="*70)
     print("Multi-OS to Enterprise SONiC Migration - Full Test Suite")
     print("="*70)
@@ -196,18 +293,18 @@ def main():
     print(f"  - Arista EOS: {len(TEST_CONFIGS['arista'])}")
     print(f"  - Juniper JunOS: {len(TEST_CONFIGS['juniper'])}")
     print(f"  - Cumulus Linux: {len(TEST_CONFIGS['cumulus'])}")
-    
+
     results = []
     total_tests = 0
     passed_tests = 0
     failed_tests = 0
-    
+
     # Test all configurations
     for os_type, configs in TEST_CONFIGS.items():
         print(f"\n{'='*70}")
         print(f"Testing {os_type.upper()} configurations ({len(configs)} files)")
         print(f"{'='*70}")
-        
+
         for config_file in configs:
             if not os.path.exists(config_file):
                 print(f"WARNING: Config file not found: {config_file}")
@@ -219,11 +316,11 @@ def main():
                 })
                 failed_tests += 1
                 continue
-            
+
             total_tests += 1
             result = run_migration_test(config_file, os_type)
             results.append(result)
-            
+
             if result.get('success') and not result.get('error'):
                 passed_tests += 1
                 print(f"[PASS] {os.path.basename(config_file)}")
@@ -232,7 +329,7 @@ def main():
                 print(f"[FAIL] {os.path.basename(config_file)}")
                 if result.get('error'):
                     print(f"  Error: {result['error']}")
-    
+
     # Print summary
     print(f"\n{'='*70}")
     print("TEST SUMMARY")
@@ -241,7 +338,7 @@ def main():
     print(f"Passed: {passed_tests}")
     print(f"Failed: {failed_tests}")
     print(f"Success rate: {(passed_tests/total_tests*100):.1f}%" if total_tests > 0 else "N/A")
-    
+
     # Print failed tests details
     if failed_tests > 0:
         print(f"\n{'='*70}")
@@ -257,8 +354,45 @@ def main():
                     if len(result['stderr']) > 300:
                         stderr_preview += "..."
                     print(f"  Stderr: {stderr_preview}")
-    
-    # Return exit code based on results
+
+    # FR-8: golden-file diff. Either overwrite or verify.
+    if args.update_goldens:
+        print(f"\n{'='*70}")
+        print("GOLDEN-FILE UPDATE (--update-goldens)")
+        print(f"{'='*70}")
+        changed = update_goldens(OUTPUT_DIR, GOLDENS_DIR)
+        if changed:
+            print(f"Overwrote {len(changed)} golden file(s) with current outputs:")
+            for path in changed:
+                print(f"  {path}")
+        else:
+            print("No golden files needed to be changed (outputs already match).")
+        sys.exit(0)
+
+    print(f"\n{'='*70}")
+    print("GOLDEN-FILE DIFF")
+    print(f"{'='*70}")
+    matches, mismatches = run_golden_diff(OUTPUT_DIR, GOLDENS_DIR)
+    print(f"Matches: {matches}")
+    print(f"Mismatches: {len(mismatches)}")
+
+    if mismatches:
+        print(f"\n{'='*70}")
+        print("GOLDEN-FILE MISMATCHES")
+        print(f"{'='*70}")
+        for out_path, gold_path, diff_preview in mismatches:
+            print(f"\n--- mismatch: {os.path.basename(out_path)} ---")
+            if diff_preview:
+                print(diff_preview)
+            else:
+                print('(no diff preview available)')
+        print(f"\n{len(mismatches)} golden-file mismatch(es) detected.")
+        print("Either fix the code, or re-run with --update-goldens after human review.")
+        print("Golden diff check: FAIL")
+        sys.exit(1)
+
+    print("Golden diff check: PASS")
+    # Return exit code based on migration results.
     sys.exit(0 if failed_tests == 0 else 1)
 
 if __name__ == '__main__':

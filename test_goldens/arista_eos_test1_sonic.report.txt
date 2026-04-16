@@ -1,0 +1,18 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/arista_eos_test1.txt
+Output file: test_outputs\arista_eos_test1_sonic.txt
+Hostname: DC-Leaf-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 5
+Physical Interfaces: 12
+Port-Channels: 2
+Loopback Interfaces: 1
+Static Routes: 1
+BGP Configured: True
+MCLAG Configured: True
+
+======================================================================
