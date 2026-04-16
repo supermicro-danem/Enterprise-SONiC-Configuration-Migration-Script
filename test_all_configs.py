@@ -51,11 +51,13 @@ TEST_CONFIGS = {
 # Standard test inputs (passwords, etc.)
 # Arista/Cisco: include MCLAG peer IP (192.168.200.3) when config has MLAG so prompt has enough input
 # Cisco: use 3 passwords so configs with 3 users (e.g. admin, operator, guest) have enough lines
+_TEST_PASSWORD = os.environ.get('SONIC_MIGRATION_TEST_PASSWORD', 'CHANGE_ME_PLACEHOLDER')
+_TEST_RADIUS_KEY = os.environ.get('SONIC_MIGRATION_TEST_RADIUS_KEY', 'CHANGE_ME_PLACEHOLDER')
 TEST_INPUTS = {
-    'cisco': 'y\ntestpass123\ntestpass123\ntestpass123\n192.168.200.254/24\n192.168.200.2\n192.168.200.3\ntestkey123\n',
-    'arista': 'y\ntestpass123\ntestpass123\n192.168.200.254/24\n192.168.200.2\n192.168.200.3\ntestkey123\n',
-    'juniper': 'y\ntestpass123\ntestpass123\n192.168.200.254/24\n192.168.200.2\ntestkey123\n',
-    'cumulus': 'y\ntestpass123\nn\nn\ntestkey123\n',  # No NTP prefer, no AAA
+    'cisco': f'y\n{_TEST_PASSWORD}\n{_TEST_PASSWORD}\n{_TEST_PASSWORD}\n192.168.200.254/24\n192.168.200.2\n192.168.200.3\n{_TEST_RADIUS_KEY}\n',
+    'arista': f'y\n{_TEST_PASSWORD}\n{_TEST_PASSWORD}\n192.168.200.254/24\n192.168.200.2\n192.168.200.3\n{_TEST_RADIUS_KEY}\n',
+    'juniper': f'y\n{_TEST_PASSWORD}\n{_TEST_PASSWORD}\n192.168.200.254/24\n192.168.200.2\n{_TEST_RADIUS_KEY}\n',
+    'cumulus': f'y\n{_TEST_PASSWORD}\nn\nn\n{_TEST_RADIUS_KEY}\n',  # No NTP prefer, no AAA
 }
 
 def run_migration_test(config_file, os_type, output_dir='test_outputs'):
@@ -91,7 +93,7 @@ def run_migration_test(config_file, os_type, output_dir='test_outputs'):
     # For Juniper, we need to handle cases with no users, MLAG, and RADIUS
     # Provide enough inputs: admin pass, mgmt IP (with CIDR), gateway, MCLAG peer, RADIUS key
     if os_type == 'juniper':
-        test_input = 'y\ntestpass123\n192.168.10.1/24\n192.168.10.254\n192.168.10.2\ntestkey123\n'
+        test_input = f'y\n{_TEST_PASSWORD}\n192.168.10.1/24\n192.168.10.254\n192.168.10.2\n{_TEST_RADIUS_KEY}\n'
     elif os_type == 'cumulus':
         # Cumulus needs: admin pass, NTP prefer (n if single, y/1 if multiple), AAA (n), RADIUS IP/key (if AAA=y)
         # For test1: has MLAG, needs mgmt IP, gateway, peer IP
@@ -112,27 +114,27 @@ def run_migration_test(config_file, os_type, output_dir='test_outputs'):
             is_test1 = 'test1' in config_file
             if has_multiple_ntp:
                 if is_test1:
-                    # Prompt order: admin, mgmt IP, gateway, [no peer - in config], AAA (y), RADIUS IP (10.3.3.1), RADIUS key (radiuskey123), NTP prefer (y), NTP server (1)
-                    test_input = 'testpass123\n192.168.10.1/24\n192.168.10.254\ny\n10.3.3.1\nradiuskey123\ny\n1\n'
+                    # Prompt order: admin, mgmt IP, gateway, [no peer - in config], AAA (y), RADIUS IP (10.3.3.1), RADIUS key, NTP prefer (y), NTP server (1)
+                    test_input = f'{_TEST_PASSWORD}\n192.168.10.1/24\n192.168.10.254\ny\n10.3.3.1\n{_TEST_RADIUS_KEY}\ny\n1\n'
                 else:
                     # admin pass, mgmt IP, gateway, [no peer - in config], NTP prefer (n), AAA (n)
-                    test_input = 'testpass123\n192.168.10.1/24\n192.168.10.254\nn\nn\n'
+                    test_input = f'{_TEST_PASSWORD}\n192.168.10.1/24\n192.168.10.254\nn\nn\n'
             else:
                 if is_test1:
-                    # admin pass, mgmt IP, gateway, [no peer - in config], AAA (y), RADIUS IP (10.3.3.1), RADIUS key (radiuskey123)
-                    test_input = 'testpass123\n192.168.10.1/24\n192.168.10.254\ny\n10.3.3.1\nradiuskey123\n'
+                    # admin pass, mgmt IP, gateway, [no peer - in config], AAA (y), RADIUS IP (10.3.3.1), RADIUS key
+                    test_input = f'{_TEST_PASSWORD}\n192.168.10.1/24\n192.168.10.254\ny\n10.3.3.1\n{_TEST_RADIUS_KEY}\n'
                 else:
                     # admin pass, mgmt IP, gateway, [no peer - in config], AAA (n)
-                    test_input = 'testpass123\n192.168.10.1/24\n192.168.10.254\nn\n'
+                    test_input = f'{_TEST_PASSWORD}\n192.168.10.1/24\n192.168.10.254\nn\n'
         else:
             # No MLAG: admin pass, NTP prefer (n if single, y/1 if multiple), AAA (n), RADIUS IP/key (if AAA=y)
             # Note: No "y" confirmation needed for admin password - it's just the password itself
             if has_multiple_ntp:
                 # admin pass, NTP prefer (n), AAA (n)
-                test_input = 'testpass123\nn\nn\n'
+                test_input = f'{_TEST_PASSWORD}\nn\nn\n'
             else:
                 # admin pass, AAA (n)
-                test_input = 'testpass123\nn\n'
+                test_input = f'{_TEST_PASSWORD}\nn\n'
     else:
         test_input = base_input
     

@@ -9,8 +9,8 @@ interface-naming standard
 !
 spanning-tree enable
 !
-username admin password testpass123 role admin
-username operator password testpass123 role network-operator
+username admin password CHANGE_ME_PLACEHOLDER role admin
+username operator password CHANGE_ME_PLACEHOLDER role network-operator
 !
 interface PortChannel 50 mode active
   mtu 9000

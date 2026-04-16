@@ -10,7 +10,8 @@ import re
 from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
-    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry
+    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry,
+    sanitize_for_output
 )
 
 
@@ -153,7 +154,7 @@ class CiscoNXOSMigrator(BaseMigrator):
 
         # Global configuration parsing
         elif line.startswith('hostname'):
-            self.hostname = ' '.join(line.split()[1:])
+            self.hostname = sanitize_for_output(' '.join(line.split()[1:]))
 
         elif line.startswith('ip address'):
             self._parse_ip_address(line)
@@ -167,7 +168,7 @@ class CiscoNXOSMigrator(BaseMigrator):
         elif line.startswith('ntp server'):
             parts = line.split()
             if len(parts) >= 3:
-                server_ip = parts[2]
+                server_ip = sanitize_for_output(parts[2])
                 if 'ntp_servers' not in self.global_settings:
                     self.global_settings['ntp_servers'] = []
                 self.global_settings['ntp_servers'].append(server_ip)
@@ -175,9 +176,9 @@ class CiscoNXOSMigrator(BaseMigrator):
                     self.global_settings['ntp_server'] = server_ip
                 if len(parts) > 3 and parts[3].lower() == 'prefer':
                     self.global_settings['ntp_preferred_server'] = server_ip
-        
+
         elif line.startswith('logging server'):
-            server_ip = line.split()[2]
+            server_ip = sanitize_for_output(line.split()[2])
             self.syslog_config.servers.append(server_ip)
         
         elif line.startswith('radius-server host'):
@@ -223,7 +224,7 @@ class CiscoNXOSMigrator(BaseMigrator):
         """Parse username configuration"""
         parts = line.split()
         if len(parts) >= 2:
-            username = parts[1]
+            username = sanitize_for_output(parts[1])
             # Extract role
             role = 'user'
             if 'role' in line:
@@ -233,17 +234,17 @@ class CiscoNXOSMigrator(BaseMigrator):
                     if 'admin' in role_part.lower():
                         role = 'admin'
                     else:
-                        role = role_part
-            
+                        role = sanitize_for_output(role_part)
+
             self.users[username] = {
                 'password': '<password>',  # Will be prompted
                 'role': role
             }
-    
+
     def _parse_vlan_start(self, line: str):
         """Parse VLAN section start"""
         vlan_spec = line.split()[1]
-        
+
         # Handle VLAN ranges like "100-105"
         if '-' in vlan_spec and not vlan_spec.startswith('-') and not vlan_spec.endswith('-'):
             try:
@@ -459,7 +460,7 @@ class CiscoNXOSMigrator(BaseMigrator):
         elif line.startswith('no shutdown'):
             intf.shutdown = False
         elif line.startswith('lldp'):
-            intf.lldp_settings.append(line)
+            intf.lldp_settings.append(sanitize_for_output(line))
         elif line.startswith('vpc '):
             # VPC configuration on interface
             if 'peer-link' in line:
@@ -868,14 +869,14 @@ class CiscoNXOSMigrator(BaseMigrator):
     def _parse_radius_config(self, line: str):
         """Parse RADIUS server configuration"""
         from base_migrator import RadiusConfig
-        
+
         parts = line.split()
         if len(parts) >= 3 and parts[1] == 'host':
             if not self.radius_config:
                 self.radius_config = RadiusConfig()
-            
-            self.radius_config.host = parts[2]
-            
+
+            self.radius_config.host = sanitize_for_output(parts[2])
+
             # Parse optional parameters
             i = 3
             while i < len(parts):
@@ -887,19 +888,19 @@ class CiscoNXOSMigrator(BaseMigrator):
                         self.radius_config.retransmit = int(parts[i + 1])
                         i += 2
                     elif parts[i] == 'key':
-                        self.radius_config.key = parts[i + 1].strip('"')
+                        self.radius_config.key = sanitize_for_output(parts[i + 1].strip('"'))
                         i += 2
                     else:
                         i += 1
                 else:
                     i += 1
-    
+
     def _parse_snmp_community(self, line: str):
         """Parse SNMP community configuration"""
         # Format: snmp-server community <name> [ro|rw]
         parts = line.split()
         if len(parts) >= 3:
-            community_name = parts[2]
+            community_name = sanitize_for_output(parts[2])
             # Default to read-write if not specified, but check for ro/rw
             permission = 'rw'  # default
             if len(parts) >= 4:
@@ -940,9 +941,9 @@ class CiscoNXOSMigrator(BaseMigrator):
             self.current_section = 'global'
             return
         if stripped.startswith('match '):
-            entries[-1].matches.append(stripped)
+            entries[-1].matches.append(sanitize_for_output(stripped))
         elif stripped.startswith('set '):
-            entries[-1].sets.append(stripped)
+            entries[-1].sets.append(sanitize_for_output(stripped))
         else:
             self.current_section = 'global'
     

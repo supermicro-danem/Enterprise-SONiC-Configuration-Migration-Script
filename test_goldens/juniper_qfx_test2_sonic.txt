@@ -9,7 +9,7 @@ interface-naming standard
 !
 spanning-tree enable
 !
-username admin password testpass123 role admin
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 1 mode active
   description "Uplink-LAG"

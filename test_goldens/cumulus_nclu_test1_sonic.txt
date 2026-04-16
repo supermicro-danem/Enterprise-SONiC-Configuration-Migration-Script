@@ -15,7 +15,7 @@ interface Management 0
   ip address 192.168.10.1/24 gwaddr 192.168.10.254
 exit
 !
-username admin password testpass123 role admin
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 10 mode active
   mtu 9000

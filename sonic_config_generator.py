@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
     LoopbackConfig, StaticRouteConfig, DCBXConfig, SyslogConfig,
-    RadiusConfig, SnmpConfig
+    RadiusConfig, SnmpConfig, sanitize_for_output
 )
 
 
@@ -404,9 +404,9 @@ class SonicConfigGenerator:
                         desc_value = desc_parts[1].strip()
                         config_lines.append(f'  description {self._quote_description(desc_value)}')
                     else:
-                        config_lines.append(f'  {cmd.strip()}')
+                        config_lines.append(f'  {sanitize_for_output(cmd.strip())}')
                 else:
-                    config_lines.append(f'  {cmd.strip()}')
+                    config_lines.append(f'  {sanitize_for_output(cmd.strip())}')
         if switchport_mode == 'trunk' and trunk_vlans:
             config_lines.append(f'  switchport trunk allowed vlan {trunk_vlans}')
         elif switchport_mode == 'access' and access_vlan:

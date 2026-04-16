@@ -10,7 +10,8 @@ import re
 from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
-    LoopbackConfig, StaticRouteConfig, RadiusConfig
+    LoopbackConfig, StaticRouteConfig, RadiusConfig,
+    sanitize_for_output
 )
 
 
@@ -137,7 +138,7 @@ class CumulusLinuxMigrator(BaseMigrator):
         """Parse hostname command: net add hostname <name>"""
         parts = cmd.split()
         if len(parts) >= 2:
-            self.hostname = parts[1]
+            self.hostname = sanitize_for_output(parts[1])
     
     def _parse_loopback(self, cmd: str):
         """Parse loopback command: net add loopback lo ip address <ip>/<cidr>"""
@@ -175,7 +176,7 @@ class CumulusLinuxMigrator(BaseMigrator):
         if 'server' in parts:
             server_index = parts.index('server')
             if server_index + 1 < len(parts):
-                ntp_server = parts[server_index + 1]
+                ntp_server = sanitize_for_output(parts[server_index + 1])
                 self.ntp_servers.append(ntp_server)
                 if 'ntp_servers' not in self.global_settings:
                     self.global_settings['ntp_servers'] = []
@@ -189,7 +190,7 @@ class CumulusLinuxMigrator(BaseMigrator):
         if 'host' in parts and 'ipv4' in parts:
             ipv4_index = parts.index('ipv4')
             if ipv4_index + 1 < len(parts):
-                syslog_server = parts[ipv4_index + 1]
+                syslog_server = sanitize_for_output(parts[ipv4_index + 1])
                 self.syslog_config.servers.append(syslog_server)
     
     def _parse_snmp(self, cmd: str):
@@ -200,14 +201,14 @@ class CumulusLinuxMigrator(BaseMigrator):
         if 'readonly-community' in parts:
             ro_index = parts.index('readonly-community')
             if ro_index + 1 < len(parts):
-                community_name = parts[ro_index + 1]
+                community_name = sanitize_for_output(parts[ro_index + 1])
                 self.snmp_config.communities[community_name] = 'ro'
-        
+
         # net add snmp-server readwrite-community <name> access any
         elif 'readwrite-community' in parts:
             rw_index = parts.index('readwrite-community')
             if rw_index + 1 < len(parts):
-                community_name = parts[rw_index + 1]
+                community_name = sanitize_for_output(parts[rw_index + 1])
                 self.snmp_config.communities[community_name] = 'rw'
     
     def _parse_bridge(self, cmd: str):

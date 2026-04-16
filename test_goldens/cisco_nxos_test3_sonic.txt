@@ -9,8 +9,8 @@ interface-naming standard
 !
 spanning-tree enable
 !
-username admin password testpass123 role admin
-username operator password testpass123 role network-operator
+username admin password CHANGE_ME_PLACEHOLDER role admin
+username operator password CHANGE_ME_PLACEHOLDER role network-operator
 !
 interface PortChannel 100 mode active
   mtu 9000
@@ -32,7 +32,7 @@ ip name-server source-interface Management 0
 ip name-server 8.8.8.8
 ip name-server 8.8.4.4
 !
-radius-server host 10.3.3.1 key testpass123 retransmit 3 timeout 10
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 3 timeout 10
 !
 aaa authentication login default group radius local
 aaa authentication login console local

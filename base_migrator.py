@@ -13,6 +13,22 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 
+def sanitize_for_output(value):
+    """Strip newline/carriage-return characters from a parsed config field
+    before it is stored in a dataclass. Prevents newline-injection attacks
+    where a crafted source config embeds \\n or \\r in a field value,
+    which would otherwise leak extra IS-CLI lines into the generated output.
+
+    Part of defense-in-depth; per-field allowlist validation is tracked
+    separately (see backlog issue #5).
+    """
+    if value is None:
+        return value
+    if isinstance(value, str):
+        return value.replace('\r\n', '').replace('\n', '').replace('\r', '')
+    return value
+
+
 @dataclass
 class VlanConfig:
     """Represents VLAN configuration"""

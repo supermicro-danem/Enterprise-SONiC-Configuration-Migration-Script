@@ -15,9 +15,9 @@ interface Management 0
   ip address 192.168.200.254/24 gwaddr 192.168.200.2
 exit
 !
-username admin password testpass123 role admin
-username operator password testpass123 role network-operator
-username guest password testpass123 role network-operator
+username admin password CHANGE_ME_PLACEHOLDER role admin
+username operator password CHANGE_ME_PLACEHOLDER role network-operator
+username guest password CHANGE_ME_PLACEHOLDER role network-operator
 !
 interface PortChannel 10 mode active
   mtu 9000
@@ -58,7 +58,7 @@ ip name-server source-interface Management 0
 ip name-server 1.1.1.1
 ip name-server 1.0.0.1
 !
-radius-server host 10.3.3.1 key testkey123 retransmit 2 timeout 5
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 2 timeout 5
 !
 aaa authentication login default group radius local
 aaa authentication login console local

@@ -10,7 +10,8 @@ import re
 from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
-    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry
+    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry,
+    sanitize_for_output
 )
 
 
@@ -132,7 +133,7 @@ class AristaEOSMigrator(BaseMigrator):
         
         # Global configuration parsing
         elif line.startswith('hostname'):
-            self.hostname = ' '.join(line.split()[1:])
+            self.hostname = sanitize_for_output(' '.join(line.split()[1:]))
         
         elif line.startswith('ip address') and self.current_section != 'loopback':
             # Only parse as management IP if not in loopback context
@@ -144,7 +145,7 @@ class AristaEOSMigrator(BaseMigrator):
         elif line.startswith('ntp server'):
             parts = line.split()
             if len(parts) >= 3:
-                server_ip = parts[2]
+                server_ip = sanitize_for_output(parts[2])
                 if 'ntp_servers' not in self.global_settings:
                     self.global_settings['ntp_servers'] = []
                 self.global_settings['ntp_servers'].append(server_ip)
@@ -152,9 +153,9 @@ class AristaEOSMigrator(BaseMigrator):
                     self.global_settings['ntp_server'] = server_ip
                 if len(parts) > 3 and parts[3].lower() == 'prefer':
                     self.global_settings['ntp_preferred_server'] = server_ip
-        
+
         elif line.startswith('logging host'):
-            server_ip = line.split()[2]
+            server_ip = sanitize_for_output(line.split()[2])
             self.syslog_config.servers.append(server_ip)
         
         elif line.startswith('radius-server host'):
@@ -209,7 +210,7 @@ class AristaEOSMigrator(BaseMigrator):
         """Parse username configuration"""
         parts = line.split()
         if len(parts) >= 2:
-            username = parts[1]
+            username = sanitize_for_output(parts[1])
             # Extract role
             role = 'user'
             if 'role' in line:
@@ -219,8 +220,8 @@ class AristaEOSMigrator(BaseMigrator):
                     if 'admin' in role_part.lower():
                         role = 'admin'
                     else:
-                        role = role_part
-            
+                        role = sanitize_for_output(role_part)
+
             self.users[username] = {
                 'password': '<password>',  # Will be prompted
                 'role': role
@@ -387,7 +388,7 @@ class AristaEOSMigrator(BaseMigrator):
         elif line.startswith('no shutdown'):
             intf.shutdown = False
         elif line.startswith('lldp'):
-            intf.lldp_settings.append(line)
+            intf.lldp_settings.append(sanitize_for_output(line))
         elif line.startswith('mlag '):
             # MLAG ID on interface
             mlag_id = line.split()[-1]
@@ -761,14 +762,14 @@ class AristaEOSMigrator(BaseMigrator):
     def _parse_radius_config(self, line: str):
         """Parse RADIUS server configuration"""
         from base_migrator import RadiusConfig
-        
+
         parts = line.split()
         if len(parts) >= 3 and parts[1] == 'host':
             if not self.radius_config:
                 self.radius_config = RadiusConfig()
-            
-            self.radius_config.host = parts[2]
-            
+
+            self.radius_config.host = sanitize_for_output(parts[2])
+
             # Parse optional parameters
             i = 3
             while i < len(parts):
@@ -784,11 +785,11 @@ class AristaEOSMigrator(BaseMigrator):
                         # Skip encryption type (7) if present and get the actual key
                         if i + 2 < len(parts) and parts[i + 1].isdigit():
                             # Format: key 7 "radiuskey123"
-                            self.radius_config.key = parts[i + 2].strip('"')
+                            self.radius_config.key = sanitize_for_output(parts[i + 2].strip('"'))
                             i += 3
                         elif i + 1 < len(parts):
                             # Format: key "radiuskey123" or key radiuskey123
-                            self.radius_config.key = parts[i + 1].strip('"')
+                            self.radius_config.key = sanitize_for_output(parts[i + 1].strip('"'))
                             i += 2
                         else:
                             i += 1
@@ -796,13 +797,13 @@ class AristaEOSMigrator(BaseMigrator):
                         i += 1
                 else:
                     i += 1
-    
+
     def _parse_snmp_community(self, line: str):
         """Parse SNMP community configuration"""
         # Format: snmp-server community <name> [ro|rw]
         parts = line.split()
         if len(parts) >= 3:
-            community_name = parts[2]
+            community_name = sanitize_for_output(parts[2])
             # Default to read-write if not specified, but check for ro/rw
             permission = 'rw'  # default
             if len(parts) >= 4:
@@ -843,9 +844,9 @@ class AristaEOSMigrator(BaseMigrator):
             self.current_section = 'global'
             return
         if stripped.startswith('match '):
-            entries[-1].matches.append(stripped)
+            entries[-1].matches.append(sanitize_for_output(stripped))
         elif stripped.startswith('set '):
-            entries[-1].sets.append(stripped)
+            entries[-1].sets.append(sanitize_for_output(stripped))
         else:
             self.current_section = 'global'
     

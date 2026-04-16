@@ -16,7 +16,7 @@ interface Management 0
 exit
 !
 username admin password y role admin
-username operator password testpass123 role network-operator
+username operator password CHANGE_ME_PLACEHOLDER role network-operator
 !
 interface PortChannel 10 mode active
   mtu 9000
@@ -51,7 +51,7 @@ ip name-server source-interface Management 0
 ip name-server 1.1.1.1
 ip name-server 1.0.0.1
 !
-radius-server host 10.3.3.1 key testkey123 retransmit 3 timeout 10
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 3 timeout 10
 !
 aaa authentication login default group radius local
 aaa authentication login console local
