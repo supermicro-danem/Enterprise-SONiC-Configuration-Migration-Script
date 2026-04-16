@@ -32,57 +32,50 @@ class SonicConfigGenerator:
         return f'"{s}"'
     
     def generate_sonic_config(self, user_inputs: Dict[str, str]) -> str:
-        """Generate SONiC configuration from parsed data"""
+        """Generate SONiC configuration from parsed data.
+
+        FR-2 canonical form, non-DCBX:
+          sonic-cli
+          configure terminal
+          ... body ...
+          end
+          write memory
+
+        FR-2 canonical form, DCBX-present (exactly two blocks, one marker):
+          sonic-cli
+          configure terminal
+          ... pre-reboot body ...
+          end
+          write memory
+          ! --- PASTE AFTER REBOOT ---
+          sonic-cli
+          configure terminal
+          buffer init lossless
+          ... post-reboot body ...
+          end
+          write memory
+        """
         config_lines = []
-        
-        # SONiC header with user instruction
+
+        # Single atomic header; no double-entry, no mid-paste write memory inside config mode.
         config_lines.extend([
-            '! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.',
-            '! You can then copy/paste the configuration commands below in sections.',
+            '! Enter the SONiC CLI shell, then paste the commands below.',
+            '! They form one atomic configure-terminal session.',
             'sonic-cli',
             '!',
             'configure terminal',
             '!',
         ])
-        
-        # Hostname
+
+        # Hostname + interface-naming standard (inside the same configure-terminal session)
         if self.migrator.hostname:
             config_lines.extend([
                 f'hostname {self.migrator.hostname}',
                 'interface-naming standard',
-                'exit',
-                'write memory',
-                'exit',
                 '!',
-                '! Exit once, then write memory, then exit again to return to Linux shell. Then re-enter sonic-cli to continue.',
+                'spanning-tree enable',
+                '!'
             ])
-            
-            # DCBX Buffer configuration (buffer init lossless will prompt to save and reboot)
-            if self.migrator.dcbx_configs:
-                config_lines.extend([
-                    '! Note: DCBX-IEEE configuration detected. QoS configurations may need review.',
-                    '! Only DCBX-IEEE is supported in SONiC (vs DCBX-CEE in SMIS).',
-                    '! The buffer init lossless command will prompt you to save and reboot automatically.',
-                    'buffer init lossless',
-                    '!',
-                    '! After the switch reboots and you log in again, enter "sonic-cli" to access the SONiC CLI shell.',
-                    '! You can then continue copy/pasting the remaining configuration commands in sections.',
-                    'sonic-cli',
-                    '!',
-                    'configure terminal',
-                    '!',
-                    'spanning-tree enable',
-                    '!'
-                ])
-            else:
-                config_lines.extend([
-                    'sonic-cli',
-                    '!',
-                    'configure terminal',
-                    '!',
-                    'spanning-tree enable',
-                    '!'
-                ])
         
         # Management interface
         self._generate_management_config(config_lines, user_inputs)
@@ -148,52 +141,78 @@ class SonicConfigGenerator:
         # BGP configuration
         self._generate_bgp_config(config_lines)
         
-        # End configuration
+        # Close the (first) configure-terminal session cleanly.
         config_lines.extend([
             'end',
             'write memory'
         ])
-        
+
+        # DCBX path: emit a single reboot marker and a second sonic-cli envelope for
+        # buffer init lossless plus any post-reboot DCBX commands. No other re-entry
+        # into sonic-cli ever appears in the output.
+        if self.migrator.dcbx_configs:
+            config_lines.extend([
+                '! --- PASTE AFTER REBOOT ---',
+                '! DCBX-IEEE configuration detected. Only DCBX-IEEE is supported in SONiC.',
+                '! The buffer init lossless command will prompt you to save and reboot.',
+                '! After the switch comes back up, re-enter the SONiC CLI shell and paste below.',
+                'sonic-cli',
+                '!',
+                'configure terminal',
+                '!',
+                'buffer init lossless',
+                '!',
+                'end',
+                'write memory',
+            ])
+
         return '\n'.join(config_lines)
     
     def _generate_management_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
-        """Generate management interface configuration"""
-        # Configure VRF before interface configuration (global command)
-        config_lines.append('ip vrf mgmt')
-        
+        """Generate management interface configuration.
+
+        FR-3: emit 'ip vrf mgmt' exactly once before the first 'interface Management 0'
+        block, and only when a management interface is actually configured. Dane
+        confirmed 2026-04-16 that 'mgmt' is NOT a built-in VRF on Enterprise Advanced
+        SONiC; only 'default' is built in. The VRF must be created.
+        """
         # When source has no explicit OOB management, do not create Management 0 IP that mirrors an SVI
         svi_ips = set()
         for vlan in (self.migrator.vlans or {}).values():
             if getattr(vlan, 'ip_address', None):
                 svi_ips.add(vlan.ip_address)
         has_explicit_mgmt = getattr(self.migrator, 'has_explicit_management_config', True)
-        
-        # Handle static IP from config
+
+        # Decide which branch will actually emit a Management 0 block, and collect its lines.
+        mgmt_block: List[str] = []
         if self.migrator.management_ip and self.migrator.management_ip != 'dhcp':
             if has_explicit_mgmt or self.migrator.management_ip not in svi_ips:
-                config_lines.append('!')
-                config_lines.append('interface Management 0')
+                mgmt_block.append('interface Management 0')
                 if self.migrator.management_mask:
                     cidr = self.migrator._mask_to_cidr(self.migrator.management_mask)
                     ip_config = f'  ip address {self.migrator.management_ip}/{cidr}'
                     if user_inputs.get('management_gateway'):
                         ip_config += f' gwaddr {user_inputs["management_gateway"]}'
-                    config_lines.append(ip_config)
-                config_lines.append('exit')
-                config_lines.append('!')
-        
-        # Handle user-provided static IP (for MCLAG cases; same prompt logic as other NOSes)
+                    mgmt_block.append(ip_config)
+                mgmt_block.append('exit')
         elif user_inputs.get('management_ip_cidr'):
             mgmt_ip = user_inputs['management_ip_cidr'].split('/')[0]
             if has_explicit_mgmt or mgmt_ip not in svi_ips or not getattr(self.migrator, 'has_explicit_management_config', True):
-                config_lines.append('!')
-                config_lines.append('interface Management 0')
+                mgmt_block.append('interface Management 0')
                 ip_config = f'  ip address {user_inputs["management_ip_cidr"]}'
                 if user_inputs.get('management_gateway'):
                     ip_config += f' gwaddr {user_inputs["management_gateway"]}'
-                config_lines.append(ip_config)
-                config_lines.append('exit')
-                config_lines.append('!')
+                mgmt_block.append(ip_config)
+                mgmt_block.append('exit')
+
+        if not mgmt_block:
+            return
+
+        # Emit VRF then the management interface block.
+        config_lines.append('ip vrf mgmt')
+        config_lines.append('!')
+        config_lines.extend(mgmt_block)
+        config_lines.append('!')
     
     def _generate_user_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
         """Generate user configuration (dedupe by lowercase username; add fallback admin only if missing)."""
