@@ -584,36 +584,240 @@ class SonicConfigGenerator:
         config_lines.append('exit')
         config_lines.append('!')
 
+    def _materialize_pc_range_members(self, start: int, end: int, range_cmds: List[str]) -> None:
+        """Create individual PortChannelConfig entries for members of a suppressed
+        parser-level port-channel range, deriving settings from the range's
+        sub-commands. Members that already exist in port_channels are preserved
+        (their individual settings take precedence).
+        """
+        if self.migrator.port_channels is None:
+            self.migrator.port_channels = {}
+        description = ''
+        mtu = 9000
+        mtu_configured = False
+        mode = ''
+        allowed_vlans: List[str] = []
+        access_vlan = ''
+        native_vlan = ''
+        for cmd in range_cmds:
+            c = cmd.strip()
+            if c.lower().startswith('description '):
+                description = c.split(' ', 1)[1]
+            elif c.lower().startswith('mtu '):
+                try:
+                    mtu = int(c.split()[1])
+                    mtu_configured = True
+                except (IndexError, ValueError):
+                    pass
+            elif c.lower().startswith('switchport mode '):
+                mode = c.split()[-1]
+            elif c.lower().startswith('switchport trunk allowed vlan '):
+                vlans = ' '.join(c.split()[4:])
+                allowed_vlans = [v.strip() for v in vlans.split(',')]
+                mode = mode or 'trunk'
+            elif c.lower().startswith('switchport access vlan '):
+                access_vlan = c.split()[-1]
+                mode = mode or 'access'
+            elif c.lower().startswith('switchport trunk native vlan '):
+                native_vlan = c.split()[-1]
+                mode = mode or 'trunk'
+        for n in range(start, end + 1):
+            key = str(n)
+            if key in self.migrator.port_channels:
+                continue
+            self.migrator.port_channels[key] = PortChannelConfig(
+                po_id=key,
+                description=description,
+                mtu=mtu,
+                mtu_configured=mtu_configured,
+                mode=mode,
+                allowed_vlans=list(allowed_vlans),
+                access_vlan=access_vlan,
+                native_vlan=native_vlan,
+            )
+
+    def _po_settings_tuple(self, po_config: PortChannelConfig):
+        """Return a hashable tuple of the fields that must be identical across PortChannels
+        in order to be emitted as a range block (FR-5)."""
+        return (
+            po_config.description,
+            po_config.mtu,
+            po_config.mtu_configured,
+            po_config.mode,
+            tuple(po_config.allowed_vlans),
+            po_config.access_vlan,
+            po_config.native_vlan,
+            po_config.mlag_enabled,
+            po_config.spanning_tree_disable,
+            po_config.l3_routed,
+            po_config.ip_address,
+            po_config.subnet_mask,
+        )
+
+    def _plan_port_channel_emission(self):
+        """Apply FR-5: decide which PortChannel IDs to emit as ranges vs individuals.
+
+        Rule: emit range form 'interface PortChannel M-N' iff the range covers
+        >= 3 consecutive PortChannels AND all PortChannels in [M..N] share
+        identical sub-command settings. Otherwise emit individual blocks.
+        The two forms are mutually exclusive per PortChannel.
+
+        Returns (ranges_to_emit, individual_ids_to_emit) where ranges_to_emit
+        is a list of (range_id, representative_po_config) tuples sorted by
+        start number, and individual_ids_to_emit is a sorted list of po_ids
+        that should be emitted as single blocks (never members of a range).
+        """
+        all_pos = self.migrator.port_channels or {}
+        ranges: List[tuple] = []   # list of (start:int, end:int, range_id:str)
+        for po_id in all_pos:
+            if '-' in po_id:
+                parts = po_id.split('-')
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                    start, end = int(parts[0]), int(parts[1])
+                    if end >= start:
+                        ranges.append((start, end, po_id))
+
+        ranges.sort()
+        emit_as_range: List[tuple] = []
+        covered_by_range: set = set()
+
+        for start, end, range_id in ranges:
+            span = end - start + 1
+            if span < 3:
+                # Rule requires >= 3 consecutive PortChannels; emit as individuals instead.
+                continue
+            # Collect the range config itself plus any individual PortChannel in [start..end].
+            range_po = all_pos[range_id]
+            member_configs = [range_po]
+            for n in range(start, end + 1):
+                key = str(n)
+                if key in all_pos:
+                    member_configs.append(all_pos[key])
+            # Require identical settings across the range object and all individual peers.
+            reference = self._po_settings_tuple(range_po)
+            if all(self._po_settings_tuple(pc) == reference for pc in member_configs):
+                emit_as_range.append((range_id, range_po))
+                for n in range(start, end + 1):
+                    covered_by_range.add(str(n))
+                covered_by_range.add(range_id)
+
+        # Non-emitted range objects (span < 3, or settings differ) are treated as
+        # a request to emit each member individually. Backfill each member from
+        # the range config when no individual object exists.
+        for start, end, range_id in ranges:
+            if range_id in covered_by_range:
+                continue
+            range_po = all_pos[range_id]
+            for n in range(start, end + 1):
+                key = str(n)
+                if key not in all_pos:
+                    # Materialize a copy so the emit pass has a block to render.
+                    import copy
+                    cloned = copy.deepcopy(range_po)
+                    cloned.po_id = key
+                    all_pos[key] = cloned
+            # Exclude the range_id itself from emission; its members now stand alone.
+            covered_by_range.add(range_id + '_EXCLUDE')
+
+        individual_ids: List[str] = []
+        for po_id in all_pos:
+            if '-' in po_id:
+                # Skip any range object: either handled above as range or expanded to members.
+                continue
+            if po_id in covered_by_range:
+                # Member of an emitted range block; suppressed to avoid duplicate declaration.
+                continue
+            individual_ids.append(po_id)
+        individual_ids.sort(key=lambda x: int(x) if x.isdigit() else 999)
+
+        return emit_as_range, individual_ids
+
     def _generate_port_channel_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
-        """Generate port-channel config: non-MCLAG POs first, then MCLAG domain block, then MCLAG POs; includes PortChannel range blocks."""
-        port_channel_ranges = []
+        """Generate port-channel config per FR-5.
+
+        Non-MCLAG individual POs first, then MCLAG domain block, then MCLAG POs.
+        Range blocks (emitted per FR-5 rule) follow the same MCLAG/non-MCLAG
+        ordering as individual blocks.
+        """
+        # Apply FR-5 to parser-level interface_range configs for port-channels (e.g.
+        # 'interface range port-channel 30-35', stored in range_configs rather than
+        # port_channels). The rule: emit range form iff span >= 3 AND no individual
+        # PortChannel in [M..N] already exists. Otherwise, materialize individual
+        # PortChannel objects for uncovered members (so FR-5's "every PortChannel
+        # declared exactly once" invariant still holds) and suppress the range.
+        pc_range_specs = []
         if hasattr(self.migrator, 'range_configs') and self.migrator.range_configs:
-            port_channel_ranges = [(rs, cmds) for rs, cmds in self.migrator.range_configs.items() if self._is_portchannel_range(rs)]
-        if not self.migrator.port_channels and not port_channel_ranges:
+            for rs, cmds in self.migrator.range_configs.items():
+                if not self._is_portchannel_range(rs):
+                    continue
+                m = re.search(r'(\d+)\s*-\s*(\d+)', rs)
+                if not m:
+                    pc_range_specs.append((rs, cmds))
+                    continue
+                start, end = int(m.group(1)), int(m.group(2))
+                span = end - start + 1
+                suppress_range = False
+                reason_individual = False
+                if span < 3:
+                    suppress_range = True
+                    reason_individual = True
+                else:
+                    members_present_individually = [
+                        str(n) for n in range(start, end + 1)
+                        if str(n) in (self.migrator.port_channels or {})
+                    ]
+                    if members_present_individually:
+                        suppress_range = True
+                        reason_individual = True
+
+                if suppress_range:
+                    if reason_individual:
+                        # Materialize uncovered members from the range's sub-commands so
+                        # every PortChannel in [start..end] is emitted as an individual.
+                        self._materialize_pc_range_members(start, end, cmds)
+                    continue
+                pc_range_specs.append((rs, cmds))
+
+        # FR-5: decide range vs individual emission AFTER materialization so new
+        # individual PortChannel objects are picked up.
+        emit_as_range, individual_ids = self._plan_port_channel_emission()
+
+        if not individual_ids and not emit_as_range and not pc_range_specs:
             return
 
         peer_link_po = self.migrator.mlag_config.get('peer_link_po') if self.migrator.mlag_config else None
-        sorted_pos = sorted(self.migrator.port_channels.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 999)
+        sorted_pos = [(pid, self.migrator.port_channels[pid]) for pid in individual_ids]
 
-        # First pass: PortChannels without mclag (non-MCLAG members and the peer-link itself)
+        # First pass: non-MCLAG individual PortChannels (or the peer-link itself).
         for po_id, po_config in sorted_pos:
             if not po_config.mlag_enabled or po_id == peer_link_po:
                 self._emit_one_port_channel_block(config_lines, po_id, po_config, include_mclag=False)
 
-        # MCLAG domain block (must exist before creating MCLAG member PortChannels)
+        # First-pass ranges: non-MCLAG range blocks (keep FR-5 range-vs-individual mutually exclusive).
+        for range_id, range_po in emit_as_range:
+            if not range_po.mlag_enabled:
+                self._emit_one_port_channel_block(config_lines, range_id, range_po, include_mclag=False)
+
+        # MCLAG domain block.
         if self.migrator.mlag_config:
             self._generate_mclag_config(config_lines, user_inputs)
 
-        # Second pass: PortChannels that are MCLAG members (excluding peer-link)
+        # Second pass: MCLAG member individual PortChannels (excluding peer-link).
         for po_id, po_config in sorted_pos:
             if po_config.mlag_enabled and po_id != peer_link_po:
                 self._emit_one_port_channel_block(config_lines, po_id, po_config, include_mclag=True)
 
-        # PortChannel interface range blocks
-        for range_spec, range_cmds in port_channel_ranges:
+        # Second-pass ranges: MCLAG range blocks.
+        for range_id, range_po in emit_as_range:
+            if range_po.mlag_enabled:
+                self._emit_one_port_channel_block(config_lines, range_id, range_po, include_mclag=True)
+
+        # Parser-level interface range port-channel blocks (kept for compatibility with
+        # configs that expressed PortChannel ranges via 'interface range port-channel ...').
+        for range_spec, range_cmds in pc_range_specs:
             self._emit_single_interface_range_block(config_lines, range_spec, range_cmds)
-        
-        if sorted_pos or port_channel_ranges:
+
+        if sorted_pos or emit_as_range or pc_range_specs:
             config_lines.append('!')
     
     def _generate_loopback_config(self, config_lines: List[str]):
@@ -750,9 +954,16 @@ class SonicConfigGenerator:
         if 'router_id' in self.migrator.bgp_config:
             config_lines.append(f' router-id {self.migrator.bgp_config["router_id"]}')
         
-        # Address family with redistribute statements
+        # Address family with redistribute statements.
+        # FR-4: Cisco NX-OS / Arista EOS use 'redistribute direct'; EAS FRR uses
+        # 'redistribute connected'. Map the first token and preserve the rest
+        # (e.g., the route-map suffix) untouched.
         config_lines.append(' address-family ipv4 unicast')
         for redistribute in self.migrator.bgp_config.get('redistribute', []):
+            tokens = redistribute.split()
+            if tokens and tokens[0] == 'direct':
+                tokens[0] = 'connected'
+                redistribute = ' '.join(tokens)
             config_lines.append(f'  redistribute {redistribute}')
         config_lines.append(' exit')
         

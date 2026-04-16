@@ -363,11 +363,23 @@ class CiscoNXOSMigrator(BaseMigrator):
             
             elif intf_type.startswith('Ethernet') or intf_type.startswith('ethernet'):
                 interface = ' '.join(parts[1:])
-                self.current_interface = interface
-                self.current_section = 'interface'
-                if interface not in self.physical_interfaces:
-                    self.physical_interfaces[interface] = PhysicalInterfaceConfig(interface=interface)
-                self.push_context(f'interface {interface}')
+                # FR-6: 'interface ethernet N/M-K' is a vendor range form used in NX-OS
+                # configs and run-book templates. Route it to the range path so the
+                # generator emits canonical EAS 'interface range Eth M/A-M/B' rather
+                # than leaking the source-form literal string.
+                if re.search(r'ethernet\s+\d+/\d+\s*-\s*\d+', interface, re.IGNORECASE):
+                    range_spec = f'range {interface}'
+                    self.current_interface = range_spec
+                    self.current_section = 'interface'
+                    if range_spec not in self.range_configs:
+                        self.range_configs[range_spec] = []
+                    self.push_context(f'interface {range_spec}')
+                else:
+                    self.current_interface = interface
+                    self.current_section = 'interface'
+                    if interface not in self.physical_interfaces:
+                        self.physical_interfaces[interface] = PhysicalInterfaceConfig(interface=interface)
+                    self.push_context(f'interface {interface}')
     
     def _parse_interface_config(self, line: str):
         """Parse physical interface configuration"""
