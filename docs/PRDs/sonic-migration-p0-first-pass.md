@@ -220,6 +220,23 @@ No new data model. Existing `BaseMigrator` dataclasses (`VlanConfig`, `PortChann
 - Post-paste `show running-configuration` contains every intended IS-CLI element in the generator output (modulo EAS-canonical normalization - e.g., `vlan 100` entered may render as `Vlan100` in running config; this is expected).
 - `write memory` completes without error and a reboot or `copy running-config startup-config` round-trip preserves the applied state.
 
+### 7.1 Management preservation safety rules (HARD CONSTRAINT)
+
+All destructive operations on SSE-T8196 at 172.18.0.110 must preserve management IP and default gateway so SSH access is retained between vendor test iterations. The following rules are non-negotiable:
+
+- **`write erase` command form:** only the bare `write erase` (no arguments) is authorized. This form preserves `interface Management 0` and the mgmt VRF. Confirmed on live switch via the `?` parser 2026-04-16:
+  - `write erase boot` wipes management (verbatim CLI help: "Erase the configuration files including management interface configuration"). FORBIDDEN in this validation.
+  - `write erase install` resets to factory defaults. FORBIDDEN in this validation.
+  - `write erase` + Enter is the ONLY authorized form if a full erase is ever required.
+
+- **`copy running-configuration overwrite` safety:** the file passed to `copy` must contain `interface Management 0` with the current switch IP/mask AND the default gateway configuration. The pre-capture file (`<vendor>_pre.txt` from step 3's `show running-configuration` capture) satisfies this because it was captured from the live switch. A generator's translated output does NOT satisfy this by default and MUST be inspected before any such overwrite. For the iterative restore step (step 3's final bullet), use only `<vendor>_pre.txt` as the source file.
+
+- **Preferred workflow:** the line-by-line `configure terminal` paste prescribed in step 3 is additive, not destructive. It does not wipe mgmt as long as the pasted content does not include an `interface Management 0` block with a different IP than the switch's current mgmt address. If such a block appears in the generator output (from FR-3 emission), the engineer MUST confirm the emitted IP matches the switch's current mgmt address before pasting. If it does not match, paste is aborted and the mismatch is reported as a validation finding.
+
+- **Console escape hatch:** console access is available on SSE-T8196 at 172.18.0.110 and is the recovery path if SSH is lost despite these rules. Console recovery still requires a physical or serial-over-IP session and should not be treated as a routine safety net.
+
+- **Pre-flight capture:** before starting any vendor test iteration, capture `show running-configuration interface Management 0` and `show ip route vrf mgmt 0.0.0.0/0` (or the global default route if mgmt VRF is not configured) into the validation artifact set. This gives an explicit recovery reference if the above rules are violated.
+
 ## 8. Open Items
 
 | # | Item | Proposed Resolution |
