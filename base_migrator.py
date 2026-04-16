@@ -459,6 +459,7 @@ class BaseMigrator(ABC):
                     self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
                 # Set MTU on the PortChannel to match the interface
                 self.port_channels[po_id].mtu = intf_config.mtu
+                self.port_channels[po_id].mtu_configured = True
     
     def _interface_needs_vlan_assignment(self, intf_config: PhysicalInterfaceConfig) -> bool:
         """Check if interface needs VLAN 1 assignment"""
