@@ -54,36 +54,45 @@ class CiscoNXOSMigrator(BaseMigrator):
     
     def _parse_line(self, line: str, line_num: int):
         """Parse individual configuration line"""
-        
+
         # Exit commands (handle first)
         if line == 'exit':
             self._handle_exit()
-        
-        # Section start commands
-        elif line.startswith('interface '):
+            return
+
+        # Section start commands - return after handling so the consumed header line
+        # never falls through to the global else and is logged as unsupported.
+        if line.startswith('interface '):
             self._parse_interface_start(line)
-        
-        elif line.startswith('vlan '):
+            return
+
+        if line.startswith('vlan '):
             self._parse_vlan_start(line)
-        
-        elif line.startswith('router bgp'):
+            return
+
+        if line.startswith('router bgp'):
             self._parse_bgp_start(line)
-        
-        elif line.startswith('router vrrp'):
+            return
+
+        if line.startswith('router vrrp'):
             self.current_section = 'vrrp'
             self.push_context('router vrrp')
-        
-        elif line.startswith('vpc domain'):
+            return
+
+        if line.startswith('vpc domain'):
             self._parse_vpc_domain_start(line)
-        
-        elif line.startswith('router ospf'):
+            return
+
+        if line.startswith('router ospf'):
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
             self.current_section = 'ospf'
             self.push_context(line.strip())
-        elif line.startswith('aaa group server tacacs+'):
+            return
+        if line.startswith('aaa group server tacacs+'):
             self.current_section = 'aaa_tacacs'
             self.push_context(line.strip())
-        elif self.current_section == 'aaa_tacacs':
+            return
+        if self.current_section == 'aaa_tacacs':
             if line.strip().startswith('server '):
                 # Parse TACACS+ server IP (optional: store for reference; SONiC uses RADIUS)
                 pass
@@ -92,62 +101,69 @@ class CiscoNXOSMigrator(BaseMigrator):
             else:
                 self.current_section = 'global'
                 self.pop_context()
-        elif self.current_section == 'ospf':
+            return
+        if self.current_section == 'ospf':
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
-        elif line.startswith('route-map '):
+            return
+        if line.startswith('route-map '):
             self._parse_route_map_start(line)
-        elif line.startswith('ip prefix-list '):
+            return
+        if line.startswith('ip prefix-list '):
             self._parse_prefix_list_line(line)
-        elif self.current_section == 'route_map':
+            return
+        if self.current_section == 'route_map':
             self._parse_route_map_line(line)
-        elif line.startswith('line console') or line.startswith('line vty'):
+            return
+        if line.startswith('line console') or line.startswith('line vty'):
             self.current_section = 'line'
             self.push_context(line.strip())
-        
+            return
+
         # Global configuration parsing (check these first as they can appear anywhere)
         # Only "ip route ..." is a static route; "ip router ospf ..." is OSPF interface config (unsupported)
         parts_check = line.split()
         if len(parts_check) >= 3 and parts_check[0] == 'ip' and parts_check[1] == 'route':
             self._parse_static_route(line)
-        
+            return
+
         # Context-sensitive parsing
-        elif self.current_section == 'vlan' and self.current_vlan:
+        if self.current_section == 'vlan' and self.current_vlan:
             self._parse_vlan_config(line)
-        
+
         elif self.current_section == 'vlan_interface' and self.current_vlan:
             self._parse_vlan_interface_config(line)
-        
+
         elif (self.current_section == 'interface' or self.current_section == 'loopback') and self.current_interface:
             self._parse_interface_config(line)
-        
+
         elif self.current_section == 'port-channel' and self.current_po:
             self._parse_port_channel_config(line)
-        
+
         elif self.current_section == 'bgp':
             self._parse_bgp_config(line)
-        
+
         elif self.current_section == 'vrrp':
             self._parse_vrrp_config(line)
-        
+
         elif self.current_section == 'vpc':
             self._parse_vpc_config(line)
-        
+
         elif self.current_section == 'line':
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
-        
+
         # Global configuration parsing
         elif line.startswith('hostname'):
             self.hostname = ' '.join(line.split()[1:])
-        
+
         elif line.startswith('ip address'):
             self._parse_ip_address(line)
-        
+
         elif line.startswith('ip gateway'):
             self._parse_ip_gateway(line)
-        
+
         elif line.startswith('username'):
             self._parse_username(line)
-        
+
         elif line.startswith('ntp server'):
             parts = line.split()
             if len(parts) >= 3:
@@ -279,13 +295,20 @@ class CiscoNXOSMigrator(BaseMigrator):
             intf_type = parts[1]
             
             if intf_type == 'port-channel':
-                # Handle 'interface port-channel X' - just creation, no config follows
+                # Handle 'interface port-channel X' or 'interface port-channel M-N' (range form).
+                # Set up port-channel context so sub-commands are parsed, not logged as unsupported.
                 po_id = parts[2] if len(parts) > 2 else ''
-                if po_id not in self.port_channels:
-                    self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
-                self.current_section = 'interface'
-                self.current_po = None
-                self.current_interface = None
+                if po_id:
+                    if po_id not in self.port_channels:
+                        self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
+                    self.current_section = 'port-channel'
+                    self.current_po = po_id
+                    self.current_interface = None
+                    self.push_context(f'interface port-channel {po_id}')
+                else:
+                    self.current_section = 'interface'
+                    self.current_po = None
+                    self.current_interface = None
             
             elif intf_type.lower().startswith('port-channel'):
                 # Handle 'interface port-channel20' (NX-OS no space) - config follows
@@ -474,7 +497,10 @@ class CiscoNXOSMigrator(BaseMigrator):
             
         vlan = self.vlans[self.current_vlan]
         
-        if line.startswith('ip address '):
+        if line.startswith('description '):
+            # SVI description overrides the L2 VLAN name-based description
+            vlan.description = ' '.join(line.split()[1:])
+        elif line.startswith('ip address '):
             parts = line.split()
             if len(parts) >= 3:
                 vlan.ip_address = parts[2]
@@ -483,6 +509,9 @@ class CiscoNXOSMigrator(BaseMigrator):
         elif line.startswith('mtu '):
             vlan.mtu = int(line.split()[1])
             vlan.mtu_configured = True
+        elif line.startswith('no shutdown') or line.startswith('shutdown'):
+            # SVI up/down state; SVIs default to up in SONiC. Accept as known no-op.
+            pass
         elif line.startswith('vrrp '):
             # VRRP configuration under interface vlan
             # Format 1: "vrrp 1 ip 192.168.100.254", "vrrp 1 priority 110", "vrrp 1 preempt" (single line or multi)

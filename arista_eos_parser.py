@@ -100,9 +100,10 @@ class AristaEOSMigrator(BaseMigrator):
         parts_check = line.split()
         if len(parts_check) >= 3 and parts_check[0] == 'ip' and parts_check[1] == 'route':
             self._parse_static_route(line)
-        
+            return
+
         # Context-sensitive parsing
-        elif self.current_section == 'vlan' and self.current_vlan:
+        if self.current_section == 'vlan' and self.current_vlan:
             self._parse_vlan_config(line)
         
         elif self.current_section == 'vlan_interface' and self.current_vlan:
