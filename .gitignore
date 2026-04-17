@@ -1,0 +1,13 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Local hardware validation artifacts (not for public repo)
+hw-validation/
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

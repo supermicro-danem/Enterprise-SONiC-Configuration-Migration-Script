@@ -1,10 +1,12 @@
 # Multi-OS to Enterprise SONiC Configuration Migration Tool
 
-A comprehensive Python tool for migrating network configurations from Cisco NX-OS, Arista EOS, Juniper JunOS (QFX), and Cumulus Linux to Enterprise SONiC format.
+A Python tool for migrating network configurations from Cisco NX-OS, Arista EOS, Juniper JunOS (QFX), and Cumulus Linux to Enterprise Advanced SONiC (EAS) IS-CLI format.
 
 ## Overview
 
-This migration tool automates the conversion of network switch configurations from multiple vendor-specific formats to Enterprise SONiC CLI commands. It supports parsing complex hierarchical configurations, handles interface ranges, and provides detailed error reporting for unsupported features.
+This migration tool automates the conversion of network switch configurations from multiple vendor-specific formats to Enterprise Advanced SONiC CLI commands. It supports parsing complex hierarchical configurations, handles interface ranges, and provides detailed error reporting for unsupported features.
+
+The generated IS-CLI output has been validated on live Supermicro SSE-T8164 hardware running Enterprise Advanced SONiC; see the Hardware Validation section for the tested behaviors and known hardware-target limitations.
 
 ## Features
 
@@ -107,7 +109,7 @@ If inferred, you'll see: `Inferred management gateway from static routes: <gatew
 
 The tool generates two files:
 
-1. **SONiC Configuration File** (`<output_file>`): Contains the Enterprise SONiC CLI commands. The file is organized for readability with `!` separators between blocks. After setting hostname and interface-naming standard, the script instructs you to exit once, run `write memory`, then exit again to return to the Linux shell, then re-enter `sonic-cli` to continue. MCLAG member PortChannels appear after the MCLAG domain block. Management0 and other interface blocks use indented sub-commands; native/untagged VLANs are emitted as `switchport access vlan <id>`.
+1. **SONiC Configuration File** (`<output_file>`): Contains the Enterprise Advanced SONiC IS-CLI commands. The file is organized for readability with `!` separators between blocks. The output opens with an atomic `sonic-cli` + `configure terminal` envelope. After `hostname` and `interface-naming standard`, the script emits `end` + `exit` followed by a **paste boundary** comment block instructing the operator to exit `sonic-cli` and re-enter before continuing (the `interface-naming standard` mode change is only honored by a fresh `sonic-cli` session; confirmed on live EAS hardware). The second `sonic-cli` + `configure terminal` envelope follows, then the remainder of the configuration. MCLAG member PortChannels appear after the MCLAG domain block. Management0 and other interface blocks use indented sub-commands; native/untagged VLANs are emitted as `switchport access vlan <id>`. When DCBX (`buffer init lossless`) is present, a third envelope is emitted after a reboot marker for the post-reboot commands.
 2. **Migration Report** (`<output_file>.report.txt`): Contains:
    - Migration statistics (VLANs, interfaces, routes, etc.)
    - List of unsupported features (if any)
@@ -297,8 +299,36 @@ When adding support for new features or OS types:
 3. Update test configurations
 4. Run the test suite to validate
 
+## Hardware Validation
+
+This tool has been validated against live Supermicro SSE-T8164 running Enterprise Advanced SONiC. Three rounds of paste-based hardware validation on `test_goldens/cisco_nxos_sample_sonic.txt` confirmed the following EAS-specific behaviors are emitted correctly:
+
+- `spanning-tree mode` uses valid EAS keywords (`mst`, `pvst`, `rapid-pvst`); `rstp` source keyword is normalized to `rapid-pvst`, `mstp` to `mst`. `spanning-tree enable` is never emitted (not a valid EAS command).
+- `snmp-server community <name> ro|rw` is emitted without the `ro|rw` suffix (EAS rejects the suffix).
+- `interface range` uses the `Eth` keyword, never `Ethernet` (EAS range-mode parser requires the short form in standard interface-naming mode).
+- BGP `update-source` is emitted with the explicit `interface` keyword before an interface name (e.g., `update-source interface Loopback0`); IP-literal sources pass through unchanged.
+- LAG member ports emit a matching `mtu <value>` line before `channel-group N` when the target PortChannel has an explicit MTU (EAS rejects `channel-group` when port MTU differs from PortChannel MTU; NX-OS inheritance is not available).
+- The paste-boundary comment block is emitted between the `hostname` / `interface-naming standard` block and the remaining configuration (fresh `sonic-cli` session required for the naming mode change to take effect).
+- `ip vrf mgmt` is auto-emitted before Management0 when an OOB management interface is configured.
+
+**Hardware-target limitations (not generator defects):**
+- **Speed keywords**: SSE-T8164 is a 100G/400G-only platform; sample fixtures that target 1G/10G access-switch speeds will see `%Error: Unsupported speed` on the applicable interfaces. This is a hardware/source-config mismatch.
+- **Undefined route-maps**: If a source configuration references a route-map under BGP `redistribute` that it does not define, EAS rejects the command with `%Error: No instance found`. The source config must provide the referenced route-map definitions.
+
 ## Version History
 
+- **v1.4**: Hardware-validated IS-CLI first pass
+  - **Paste boundary**: `end` + `exit` + comment block + re-entry emitted after `hostname` / `interface-naming standard` (EAS requires a fresh `sonic-cli` session before the mode change is honored)
+  - **Spanning-tree**: source STP mode recorded verbatim by parsers; generator normalizes to `mst`, `pvst`, or `rapid-pvst` (defaults to `rapid-pvst`); `spanning-tree enable` removed (HW-1 / HW-7)
+  - **SNMP**: `ro`/`rw` suffix dropped from `snmp-server community` emission (HW-2)
+  - **Interface range**: canonical `Eth` keyword replaces `Ethernet` in range specs (HW-3 / HW-4)
+  - **BGP `update-source`**: explicit `interface` keyword inserted before interface names on both peer-group and individual neighbor paths (HW-5 / HW-10)
+  - **LAG member MTU**: matching `mtu <value>` emitted before `channel-group N` on member ports whose PortChannel carries an explicit MTU; `mtu_configured` flag is now propagated via `_transfer_mtu_to_port_channels()` (HW-9)
+  - **`ip vrf mgmt`**: auto-emitted before Management0 when an OOB management interface is configured (FR-3)
+  - **BGP `redistribute`**: canonical form with optional `route-map` (FR-4)
+  - **PortChannel / interface range**: canonical form with space separator (FR-5 / FR-6)
+  - **Security**: credential input sanitized to reject embedded newlines and shell metacharacters; test suite hardened against credential-injection sample fixtures
+  - **Test harness**: `test_goldens/` committed baseline; `test_all_configs.py` runs every fixture through the migrator and diffs byte-for-byte against the baseline; `--update-goldens` refreshes after sign-off
 - **v1.3**: Output configuration organization
   - Header flow: after hostname and interface-naming standard, emit exit → write memory → exit (then re-enter sonic-cli to continue)
   - MCLAG: domain block (with space-prefixed sub-commands and trailing exit) emitted before MCLAG member PortChannels
