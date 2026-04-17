@@ -1,0 +1,188 @@
+======================================================================
+Migration Report
+======================================================================
+Input file: test_configs/cisco_nxos_test4.txt
+Output file: test_outputs\cisco_nxos_test4_sonic.txt
+Hostname: Dist-Switch-01
+
+Statistics:
+----------------------------------------------------------------------
+VLANs: 5
+Physical Interfaces: 11
+Port-Channels: 1
+Loopback Interfaces: 2
+Static Routes: 0
+BGP Configured: False
+MCLAG Configured: False
+
+Unsupported Features:
+==================================================
+
+  - version 9.3(5) (line 4) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature telnet (line 7) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ssh (line 8) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature ospf (line 9) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature tacacs+ (line 10) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature lldp (line 11) - Configuration not translated; configure manually on SONiC if needed.
+
+  - feature interface-vlan (line 12) - Configuration not translated; configure manually on SONiC if needed.
+
+  - ip domain-lookup (line 17) - Configuration not translated; configure manually on SONiC if needed.
+
+  - tacacs-server host 10.5.5.1 key 7 "tacacskey123" timeout 10 (line 30) - Configuration not translated; configure manually on SONiC if needed.
+
+  - tacacs-server host 10.5.5.2 key 7 "tacacskey456" timeout 10 (line 31) - Configuration not translated; configure manually on SONiC if needed.
+
+  - aaa authentication login console local (line 39) - Configuration not translated; configure manually on SONiC if needed.
+
+  - aaa authorization commands default group TACACS-SERVERS local (line 40) - Configuration not translated; configure manually on SONiC if needed.
+
+  - aaa accounting default group TACACS-SERVERS (line 41) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/1
+  - ip ospf network point-to-point (line 66) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/1
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 67) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/2
+  - ip ospf network point-to-point (line 75) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/2
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 76) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/3
+  - ip ospf network point-to-point (line 84) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/3
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 85) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/4
+  - ip ospf network point-to-point (line 93) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/4
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 94) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/5
+  - ip ospf network point-to-point (line 102) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/5
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 103) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/6
+  - ip ospf network point-to-point (line 111) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/6
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 112) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/7
+  - ip ospf network point-to-point (line 120) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/7
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 121) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Ethernet1/7
+  - ip ospf cost 100 (line 122) - Configuration not translated; configure manually on SONiC if needed.
+
+interface port-channel 50
+  - ip ospf network point-to-point (line 144) - Configuration not translated; configure manually on SONiC if needed.
+
+interface port-channel 50
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 145) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 500
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 163) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 600
+  - ip router ospf UNDERLAY area 0.0.0.1 (line 169) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 700
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 175) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 800
+  - ip ospf network broadcast (line 181) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 800
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 182) - Configuration not translated; configure manually on SONiC if needed.
+
+interface vlan 800
+  - ip ospf cost 200 (line 183) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Loopback0
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 189) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Loopback1
+  - ip router ospf UNDERLAY area 0.0.0.0 (line 194) - Configuration not translated; configure manually on SONiC if needed.
+
+interface Loopback1
+  - router ospf UNDERLAY (line 196) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - router-id 10.255.0.1 (line 197) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - auto-cost reference-bandwidth 100000 (line 198) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - log-adjacency-changes detail (line 199) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - area 0.0.0.1 range 192.168.50.0/23 (line 200) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - area 0.0.0.1 range 10.1.1.0/24 (line 201) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - passive-interface default (line 202) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/1 (line 203) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/2 (line 204) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/3 (line 205) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/4 (line 206) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/5 (line 207) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/6 (line 208) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface Ethernet1/7 (line 209) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface port-channel50 (line 210) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - no passive-interface vlan800 (line 211) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - ip route 0.0.0.0/0 10.0.0.0 (line 213) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - line console (line 215) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - line vty (line 216) - Configuration not translated; configure manually on SONiC if needed.
+
+router ospf UNDERLAY
+  - session-limit 10 (line 217) - Configuration not translated; configure manually on SONiC if needed.
+
+
+Recommendations:
+----------------------------------------------------------------------
+Please review the unsupported features listed above and configure them manually
+in the SONiC device after applying the generated configuration.
+
+======================================================================

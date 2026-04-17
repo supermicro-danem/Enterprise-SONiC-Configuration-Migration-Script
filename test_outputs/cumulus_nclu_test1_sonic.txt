@@ -1,29 +1,47 @@
-! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.
-! You can then copy/paste the configuration commands below in sections.
+! Enter the SONiC CLI shell, then paste the commands below.
+! They form one atomic configure-terminal session.
 sonic-cli
 !
 configure terminal
 !
 hostname DC-Leaf-Cumulus-01
 interface-naming standard
-write memory
-!
+end
 exit
-!
-! Exit sonic-cli and re-enter to apply interface-naming standard changes.
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
 sonic-cli
 !
 configure terminal
 !
-spanning-tree enable
+spanning-tree mode rapid-pvst
 !
 ip vrf mgmt
-username admin password testpass123 role admin
+!
+interface Management 0
+  ip address 192.168.10.1/24 gwaddr 192.168.10.254
+exit
+!
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 10 mode active
   mtu 9000
   switchport trunk allowed vlan 10,20,30,40
 exit
+!
+mclag domain 20
+  peer-link PortChannel 10
+  mclag-system-mac 00:11:22:33:44:55
+  source-ip 192.168.10.1
+  peer-ip y
+exit
+!
 interface PortChannel 20 mode active
   mtu 1500
   description "Server-Farm-LAG"
@@ -31,11 +49,6 @@ interface PortChannel 20 mode active
   mclag 20
 exit
 !
-mclag domain 20
-peer-link PortChannel 10
-mclag-system-mac 00:11:22:33:44:55
-source-ip 192.168.10.1
-peer-ip y
 !
 logging server 10.2.2.1
 !
@@ -50,27 +63,31 @@ ip name-server source-interface Management 0
 ip name-server 1.1.1.1
 ip name-server 1.0.0.1
 !
-snmp-server community public ro
+snmp-server community public
 !
-snmp-server community private rw
+snmp-server community private
 !
 interface vlan 10
   description "Management-VLAN-Interface"
   ip address 192.168.10.1/24
 exit
+!
 interface vlan 20
   description "Server-VLAN-Interface"
   ip address 192.168.20.1/24
 exit
+!
 interface vlan 30
   description "Storage-VLAN-Interface"
   mtu 9000
   ip address 192.168.30.1/24
 exit
+!
 interface vlan 40
   description "DMZ-VLAN-Interface"
   ip address 192.168.40.1/24
 exit
+!
 !
 interface Eth 1/1
   mtu 9000
@@ -79,6 +96,7 @@ interface Eth 1/1
   switchport trunk allowed vlan 10,20,30,40
   no shutdown
 exit
+!
 interface Eth 1/2
   mtu 9000
   speed 10000
@@ -86,6 +104,7 @@ interface Eth 1/2
   switchport trunk allowed vlan 10,20,30,40
   no shutdown
 exit
+!
 interface Eth 1/3
   mtu 1500
   speed 1000
@@ -93,6 +112,7 @@ interface Eth 1/3
   switchport access vlan 20
   no shutdown
 exit
+!
 interface Eth 1/4
   mtu 1500
   speed 1000
@@ -100,6 +120,7 @@ interface Eth 1/4
   switchport access vlan 20
   no shutdown
 exit
+!
 interface Eth 1/5
   mtu 9000
   speed 10000
@@ -107,6 +128,7 @@ interface Eth 1/5
   switchport access vlan 30
   no shutdown
 exit
+!
 interface Eth 1/6
   mtu 9000
   speed 10000
@@ -114,6 +136,7 @@ interface Eth 1/6
   switchport access vlan 30
   no shutdown
 exit
+!
 interface Eth 1/7
   mtu 1500
   speed 1000
@@ -121,6 +144,7 @@ interface Eth 1/7
   switchport access vlan 40
   no shutdown
 exit
+!
 interface Eth 1/8
   mtu 1500
   speed 1000
@@ -128,26 +152,36 @@ interface Eth 1/8
   switchport access vlan 40
   no shutdown
 exit
+!
 interface Eth 1/9
+  mtu 9000
   channel-group 10
   no shutdown
 exit
+!
 interface Eth 1/10
+  mtu 9000
   channel-group 10
   no shutdown
 exit
+!
 interface Eth 1/11
-  channel-group 20
-  no shutdown
-exit
-interface Eth 1/12
+  mtu 1500
   channel-group 20
   no shutdown
 exit
 !
+interface Eth 1/12
+  mtu 1500
+  channel-group 20
+  no shutdown
+exit
+!
+!
 interface Loopback0
   ip address 10.0.0.1/32
 exit
+!
 !
 ip route 0.0.0.0/0 192.168.10.254
 !
@@ -159,12 +193,12 @@ router bgp 65010
  neighbor 10.10.10.1
   remote-as 65001
   description "Spine-01"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 5
  neighbor 10.10.10.2
   remote-as 65001
   description "Spine-02"
-  update-source Loopback0
+  update-source interface Loopback0
   ebgp-multihop 5
 exit
 !

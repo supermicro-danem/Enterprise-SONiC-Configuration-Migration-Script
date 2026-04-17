@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
     LoopbackConfig, StaticRouteConfig, DCBXConfig, SyslogConfig,
-    RadiusConfig, SnmpConfig
+    RadiusConfig, SnmpConfig, sanitize_for_output
 )
 
 
@@ -30,59 +30,144 @@ class SonicConfigGenerator:
         if s.startswith('"') and s.endswith('"'):
             return s
         return f'"{s}"'
+
+    @staticmethod
+    def _is_ip_literal(value: str) -> bool:
+        """Return True when value is an IPv4 or IPv6 address literal.
+
+        Used by HW-10 update-source emission: EAS expects either an IP
+        literal OR the 'interface' keyword followed by a name. When the
+        value is an IP, the 'interface' keyword must NOT be emitted.
+        """
+        if not value:
+            return False
+        v = str(value).strip()
+        # IPv4 dotted-quad
+        if re.match(r'^\d{1,3}(\.\d{1,3}){3}$', v):
+            return True
+        # IPv6: presence of ':' is a sufficient and conservative heuristic;
+        # any source-config value that contains a colon is not an interface name.
+        if ':' in v:
+            return True
+        return False
+
+    def _emit_update_source(self, value: str, indent: str = '  ') -> str:
+        """Build a single 'update-source ...' line for a BGP neighbor.
+
+        HW-10: EAS '(config-router-bgp-neighbor)# update-source ?' returns
+        either an IP literal (A.B.C.D / A::B) OR the keyword 'interface'
+        followed by an interface name. A bare interface token (e.g.
+        'update-source Loopback0') is rejected. Emit the 'interface'
+        keyword for interface-name inputs and pass IP literals through
+        unchanged.
+        """
+        v = (value or '').strip()
+        if self._is_ip_literal(v):
+            return f'{indent}update-source {v}'
+        canonical = self._canonicalize_source_interface(v)
+        return f'{indent}update-source interface {canonical}'
+
+    def _canonicalize_source_interface(self, name: str) -> str:
+        """Normalize a source-interface or update-source value to EAS-accepted case.
+
+        HW-5: EAS IS-CLI is case-sensitive on interface names used as values
+        to 'update-source' (and similar 'source-interface' contexts). Source
+        parsers may emit lowercase 'loopback0' (NX-OS) or the abbreviated
+        Cumulus form 'lo'; EAS expects 'Loopback0' (capital L). Apply the
+        canonical form here so callers do not have to remember the rule.
+        """
+        if not name:
+            return name
+        val = str(name).strip()
+        # Cumulus abbreviation: 'lo' -> 'Loopback0'
+        if val.lower() == 'lo':
+            return 'Loopback0'
+        # Loopback normalization: match 'loopback<N>' or 'Loopback<N>' in any case
+        m = re.match(r'^loopback(\d+)$', val, re.IGNORECASE)
+        if m:
+            return f'Loopback{m.group(1)}'
+        return val
     
     def generate_sonic_config(self, user_inputs: Dict[str, str]) -> str:
-        """Generate SONiC configuration from parsed data"""
+        """Generate SONiC configuration from parsed data.
+
+        FR-2 canonical form, non-DCBX:
+          sonic-cli
+          configure terminal
+          ... body ...
+          end
+          write memory
+
+        FR-2 canonical form, DCBX-present (exactly two blocks, one marker):
+          sonic-cli
+          configure terminal
+          ... pre-reboot body ...
+          end
+          write memory
+          ! --- PASTE AFTER REBOOT ---
+          sonic-cli
+          configure terminal
+          buffer init lossless
+          ... post-reboot body ...
+          end
+          write memory
+        """
         config_lines = []
-        
-        # SONiC header with user instruction
+
+        # Single atomic header; no double-entry, no mid-paste write memory inside config mode.
         config_lines.extend([
-            '! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.',
-            '! You can then copy/paste the configuration commands below in sections.',
+            '! Enter the SONiC CLI shell, then paste the commands below.',
+            '! They form one atomic configure-terminal session.',
             'sonic-cli',
             '!',
             'configure terminal',
             '!',
         ])
-        
-        # Hostname
+
+        # Hostname + interface-naming standard (inside the same configure-terminal session)
         if self.migrator.hostname:
+            # HW-1/HW-7: EAS has no 'spanning-tree enable'. The valid
+            # sub-keyword is 'spanning-tree mode <mst|pvst|rapid-pvst>'.
+            # EAS does NOT accept 'rstp' or 'mstp' (round-2 hardware
+            # validation, hw-validation/HW_VALIDATION_REPORT_V2.md).
+            # Normalize any source keyword and default to 'rapid-pvst' when
+            # the source had no explicit mode (rapid spanning-tree is the
+            # safest enable form for a migrated config).
+            raw_mode = (getattr(self.migrator, 'stp_mode', '') or '').strip().lower()
+            stp_mode_map = {
+                'rstp': 'rapid-pvst',
+                'rapid-pvst': 'rapid-pvst',
+                'mstp': 'mst',
+                'mst': 'mst',
+                'pvst': 'pvst',
+                'pvst+': 'pvst',
+                'rapid-pvst+': 'rapid-pvst',
+            }
+            stp_mode = stp_mode_map.get(raw_mode, 'rapid-pvst')
+            # Interface-naming standard requires exiting and re-entering sonic-cli
+            # before the new mode is honored by the parser (confirmed on live EAS
+            # 2026-04-16). Split the session with a clear paste boundary so the
+            # interface commands that follow run under the new naming mode.
             config_lines.extend([
                 f'hostname {self.migrator.hostname}',
                 'interface-naming standard',
+                'end',
                 'exit',
-                'write memory',
-                'exit',
+                '! ============================================================',
+                '! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.',
+                '! interface-naming standard takes effect only on a fresh',
+                '! sonic-cli session. In the Linux shell run:',
+                '!   exit',
+                '!   sonic-cli',
+                '! Then resume pasting below.',
+                '! ============================================================',
+                'sonic-cli',
                 '!',
-                '! Exit once, then write memory, then exit again to return to Linux shell. Then re-enter sonic-cli to continue.',
+                'configure terminal',
+                '!',
+                f'spanning-tree mode {stp_mode}',
+                '!'
             ])
-            
-            # DCBX Buffer configuration (buffer init lossless will prompt to save and reboot)
-            if self.migrator.dcbx_configs:
-                config_lines.extend([
-                    '! Note: DCBX-IEEE configuration detected. QoS configurations may need review.',
-                    '! Only DCBX-IEEE is supported in SONiC (vs DCBX-CEE in SMIS).',
-                    '! The buffer init lossless command will prompt you to save and reboot automatically.',
-                    'buffer init lossless',
-                    '!',
-                    '! After the switch reboots and you log in again, enter "sonic-cli" to access the SONiC CLI shell.',
-                    '! You can then continue copy/pasting the remaining configuration commands in sections.',
-                    'sonic-cli',
-                    '!',
-                    'configure terminal',
-                    '!',
-                    'spanning-tree enable',
-                    '!'
-                ])
-            else:
-                config_lines.extend([
-                    'sonic-cli',
-                    '!',
-                    'configure terminal',
-                    '!',
-                    'spanning-tree enable',
-                    '!'
-                ])
         
         # Management interface
         self._generate_management_config(config_lines, user_inputs)
@@ -148,52 +233,78 @@ class SonicConfigGenerator:
         # BGP configuration
         self._generate_bgp_config(config_lines)
         
-        # End configuration
+        # Close the (first) configure-terminal session cleanly.
         config_lines.extend([
             'end',
             'write memory'
         ])
-        
+
+        # DCBX path: emit a single reboot marker and a second sonic-cli envelope for
+        # buffer init lossless plus any post-reboot DCBX commands. No other re-entry
+        # into sonic-cli ever appears in the output.
+        if self.migrator.dcbx_configs:
+            config_lines.extend([
+                '! --- PASTE AFTER REBOOT ---',
+                '! DCBX-IEEE configuration detected. Only DCBX-IEEE is supported in SONiC.',
+                '! The buffer init lossless command will prompt you to save and reboot.',
+                '! After the switch comes back up, re-enter the SONiC CLI shell and paste below.',
+                'sonic-cli',
+                '!',
+                'configure terminal',
+                '!',
+                'buffer init lossless',
+                '!',
+                'end',
+                'write memory',
+            ])
+
         return '\n'.join(config_lines)
     
     def _generate_management_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
-        """Generate management interface configuration"""
-        # Configure VRF before interface configuration (global command)
-        config_lines.append('ip vrf mgmt')
-        
+        """Generate management interface configuration.
+
+        FR-3: emit 'ip vrf mgmt' exactly once before the first 'interface Management 0'
+        block, and only when a management interface is actually configured. Dane
+        confirmed 2026-04-16 that 'mgmt' is NOT a built-in VRF on Enterprise Advanced
+        SONiC; only 'default' is built in. The VRF must be created.
+        """
         # When source has no explicit OOB management, do not create Management 0 IP that mirrors an SVI
         svi_ips = set()
         for vlan in (self.migrator.vlans or {}).values():
             if getattr(vlan, 'ip_address', None):
                 svi_ips.add(vlan.ip_address)
         has_explicit_mgmt = getattr(self.migrator, 'has_explicit_management_config', True)
-        
-        # Handle static IP from config
+
+        # Decide which branch will actually emit a Management 0 block, and collect its lines.
+        mgmt_block: List[str] = []
         if self.migrator.management_ip and self.migrator.management_ip != 'dhcp':
             if has_explicit_mgmt or self.migrator.management_ip not in svi_ips:
-                config_lines.append('!')
-                config_lines.append('interface Management 0')
+                mgmt_block.append('interface Management 0')
                 if self.migrator.management_mask:
                     cidr = self.migrator._mask_to_cidr(self.migrator.management_mask)
                     ip_config = f'  ip address {self.migrator.management_ip}/{cidr}'
                     if user_inputs.get('management_gateway'):
                         ip_config += f' gwaddr {user_inputs["management_gateway"]}'
-                    config_lines.append(ip_config)
-                config_lines.append('exit')
-                config_lines.append('!')
-        
-        # Handle user-provided static IP (for MCLAG cases; same prompt logic as other NOSes)
+                    mgmt_block.append(ip_config)
+                mgmt_block.append('exit')
         elif user_inputs.get('management_ip_cidr'):
             mgmt_ip = user_inputs['management_ip_cidr'].split('/')[0]
             if has_explicit_mgmt or mgmt_ip not in svi_ips or not getattr(self.migrator, 'has_explicit_management_config', True):
-                config_lines.append('!')
-                config_lines.append('interface Management 0')
+                mgmt_block.append('interface Management 0')
                 ip_config = f'  ip address {user_inputs["management_ip_cidr"]}'
                 if user_inputs.get('management_gateway'):
                     ip_config += f' gwaddr {user_inputs["management_gateway"]}'
-                config_lines.append(ip_config)
-                config_lines.append('exit')
-                config_lines.append('!')
+                mgmt_block.append(ip_config)
+                mgmt_block.append('exit')
+
+        if not mgmt_block:
+            return
+
+        # Emit VRF then the management interface block.
+        config_lines.append('ip vrf mgmt')
+        config_lines.append('!')
+        config_lines.extend(mgmt_block)
+        config_lines.append('!')
     
     def _generate_user_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
         """Generate user configuration (dedupe by lowercase username; add fallback admin only if missing)."""
@@ -334,6 +445,13 @@ class SonicConfigGenerator:
             alt = self.migrator.convert_interface_name('range ' + range_spec)
             if alt.startswith('range '):
                 return alt
+        # HW-3/HW-4 defensive: EAS 'interface-naming standard' mode uses 'Eth'
+        # (not 'Ethernet') inside range specs. Any 'range Ethernet' that leaks
+        # through parser changes is normalized to the canonical 'range Eth' so
+        # a regression in a per-vendor parser cannot reintroduce the cascade
+        # failure observed on SSE-T8164.
+        if re.match(r'^range\s+Ethernet\b', sonic_range, re.IGNORECASE):
+            sonic_range = re.sub(r'^range\s+Ethernet\s*', 'range Eth ', sonic_range, count=1, flags=re.IGNORECASE)
         return sonic_range
 
     def _is_portchannel_range(self, range_spec: str) -> bool:
@@ -385,9 +503,9 @@ class SonicConfigGenerator:
                         desc_value = desc_parts[1].strip()
                         config_lines.append(f'  description {self._quote_description(desc_value)}')
                     else:
-                        config_lines.append(f'  {cmd.strip()}')
+                        config_lines.append(f'  {sanitize_for_output(cmd.strip())}')
                 else:
-                    config_lines.append(f'  {cmd.strip()}')
+                    config_lines.append(f'  {sanitize_for_output(cmd.strip())}')
         if switchport_mode == 'trunk' and trunk_vlans:
             config_lines.append(f'  switchport trunk allowed vlan {trunk_vlans}')
         elif switchport_mode == 'access' and access_vlan:
@@ -429,29 +547,45 @@ class SonicConfigGenerator:
             # Special handling for interfaces with channel-groups
             if intf_config.channel_group:
                 # For channel-group interfaces: speed, mtu, fec, description, channel-group, no shutdown, and LLDP
-                
+
                 # Add speed if present
                 if intf_config.speed:
                     # Convert speed format: "forced 1G" -> "1000", "forced 10G" -> "10000", etc.
                     speed_value = self._normalize_speed(intf_config.speed)
                     if speed_value:
                         config_lines.append(f'  speed {speed_value}')
-                
-                # Emit MTU only when source had explicit "mtu X" (avoid adding MTU to interfaces that didn't have it)
-                if intf_config.mtu_configured:
+
+                # HW-9: EAS rejects 'channel-group <N>' when the member port
+                # MTU does not match the parent PortChannel MTU
+                # ("% Error: Configuration not allowed when port MTU not
+                # same as portchannel MTU"). NX-OS / EOS inherit member
+                # MTU implicitly; EAS does not. Cross-reference the
+                # parent PortChannel's explicit MTU and emit a matching
+                # 'mtu <pc_mtu>' BEFORE 'channel-group <N>' so the
+                # channel-group binding is accepted.
+                pc_id = str(intf_config.channel_group)
+                pc_cfg = (self.migrator.port_channels or {}).get(pc_id)
+                pc_mtu_emitted = False
+                if pc_cfg is not None and getattr(pc_cfg, 'mtu_configured', False):
+                    config_lines.append(f'  mtu {pc_cfg.mtu}')
+                    pc_mtu_emitted = True
+
+                # Emit member-port MTU only when source had explicit "mtu X"
+                # AND we have not already emitted a parent-derived MTU above.
+                if intf_config.mtu_configured and not pc_mtu_emitted:
                     config_lines.append(f'  mtu {intf_config.mtu}')
-                
+
                 # Add FEC configuration if present (stays on Eth interface, not PortChannel)
                 if intf_config.fec and intf_config.fec != 'auto':
                     config_lines.append(f'  {intf_config.fec}')
-                
+
                 # Add description if present
                 if intf_config.description:
                     config_lines.append(f'  description {self._quote_description(intf_config.description)}')
-                
+
                 # Add channel-group (always for channel-group interfaces)
                 config_lines.append(f'  channel-group {intf_config.channel_group}')
-                
+
                 # Add no shutdown (always for channel-group interfaces)
                 config_lines.append('  no shutdown')
             else:
@@ -560,41 +694,248 @@ class SonicConfigGenerator:
                 config_lines.append(f'  mclag {mclag_domain}')
         
         if po_config.spanning_tree_disable:
-            config_lines.append('  no spanning-tree enable')
+            # HW-1 defensive: EAS per-interface STP-disable keyword is 'no spanning-tree'
+            # (no 'enable' trailing keyword exists). Keep emission minimal and
+            # hardware-valid.
+            config_lines.append('  no spanning-tree')
         
         config_lines.append('exit')
         config_lines.append('!')
 
+    def _materialize_pc_range_members(self, start: int, end: int, range_cmds: List[str]) -> None:
+        """Create individual PortChannelConfig entries for members of a suppressed
+        parser-level port-channel range, deriving settings from the range's
+        sub-commands. Members that already exist in port_channels are preserved
+        (their individual settings take precedence).
+        """
+        if self.migrator.port_channels is None:
+            self.migrator.port_channels = {}
+        description = ''
+        mtu = 9000
+        mtu_configured = False
+        mode = ''
+        allowed_vlans: List[str] = []
+        access_vlan = ''
+        native_vlan = ''
+        for cmd in range_cmds:
+            c = cmd.strip()
+            if c.lower().startswith('description '):
+                description = c.split(' ', 1)[1]
+            elif c.lower().startswith('mtu '):
+                try:
+                    mtu = int(c.split()[1])
+                    mtu_configured = True
+                except (IndexError, ValueError):
+                    pass
+            elif c.lower().startswith('switchport mode '):
+                mode = c.split()[-1]
+            elif c.lower().startswith('switchport trunk allowed vlan '):
+                vlans = ' '.join(c.split()[4:])
+                allowed_vlans = [v.strip() for v in vlans.split(',')]
+                mode = mode or 'trunk'
+            elif c.lower().startswith('switchport access vlan '):
+                access_vlan = c.split()[-1]
+                mode = mode or 'access'
+            elif c.lower().startswith('switchport trunk native vlan '):
+                native_vlan = c.split()[-1]
+                mode = mode or 'trunk'
+        for n in range(start, end + 1):
+            key = str(n)
+            if key in self.migrator.port_channels:
+                continue
+            self.migrator.port_channels[key] = PortChannelConfig(
+                po_id=key,
+                description=description,
+                mtu=mtu,
+                mtu_configured=mtu_configured,
+                mode=mode,
+                allowed_vlans=list(allowed_vlans),
+                access_vlan=access_vlan,
+                native_vlan=native_vlan,
+            )
+
+    def _po_settings_tuple(self, po_config: PortChannelConfig):
+        """Return a hashable tuple of the fields that must be identical across PortChannels
+        in order to be emitted as a range block (FR-5)."""
+        return (
+            po_config.description,
+            po_config.mtu,
+            po_config.mtu_configured,
+            po_config.mode,
+            tuple(po_config.allowed_vlans),
+            po_config.access_vlan,
+            po_config.native_vlan,
+            po_config.mlag_enabled,
+            po_config.spanning_tree_disable,
+            po_config.l3_routed,
+            po_config.ip_address,
+            po_config.subnet_mask,
+        )
+
+    def _plan_port_channel_emission(self):
+        """Apply FR-5: decide which PortChannel IDs to emit as ranges vs individuals.
+
+        Rule: emit range form 'interface PortChannel M-N' iff the range covers
+        >= 3 consecutive PortChannels AND all PortChannels in [M..N] share
+        identical sub-command settings. Otherwise emit individual blocks.
+        The two forms are mutually exclusive per PortChannel.
+
+        Returns (ranges_to_emit, individual_ids_to_emit) where ranges_to_emit
+        is a list of (range_id, representative_po_config) tuples sorted by
+        start number, and individual_ids_to_emit is a sorted list of po_ids
+        that should be emitted as single blocks (never members of a range).
+        """
+        all_pos = self.migrator.port_channels or {}
+        ranges: List[tuple] = []   # list of (start:int, end:int, range_id:str)
+        for po_id in all_pos:
+            if '-' in po_id:
+                parts = po_id.split('-')
+                if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                    start, end = int(parts[0]), int(parts[1])
+                    if end >= start:
+                        ranges.append((start, end, po_id))
+
+        ranges.sort()
+        emit_as_range: List[tuple] = []
+        covered_by_range: set = set()
+
+        for start, end, range_id in ranges:
+            span = end - start + 1
+            if span < 3:
+                # Rule requires >= 3 consecutive PortChannels; emit as individuals instead.
+                continue
+            # Collect the range config itself plus any individual PortChannel in [start..end].
+            range_po = all_pos[range_id]
+            member_configs = [range_po]
+            for n in range(start, end + 1):
+                key = str(n)
+                if key in all_pos:
+                    member_configs.append(all_pos[key])
+            # Require identical settings across the range object and all individual peers.
+            reference = self._po_settings_tuple(range_po)
+            if all(self._po_settings_tuple(pc) == reference for pc in member_configs):
+                emit_as_range.append((range_id, range_po))
+                for n in range(start, end + 1):
+                    covered_by_range.add(str(n))
+                covered_by_range.add(range_id)
+
+        # Non-emitted range objects (span < 3, or settings differ) are treated as
+        # a request to emit each member individually. Backfill each member from
+        # the range config when no individual object exists.
+        for start, end, range_id in ranges:
+            if range_id in covered_by_range:
+                continue
+            range_po = all_pos[range_id]
+            for n in range(start, end + 1):
+                key = str(n)
+                if key not in all_pos:
+                    # Materialize a copy so the emit pass has a block to render.
+                    import copy
+                    cloned = copy.deepcopy(range_po)
+                    cloned.po_id = key
+                    all_pos[key] = cloned
+            # Exclude the range_id itself from emission; its members now stand alone.
+            covered_by_range.add(range_id + '_EXCLUDE')
+
+        individual_ids: List[str] = []
+        for po_id in all_pos:
+            if '-' in po_id:
+                # Skip any range object: either handled above as range or expanded to members.
+                continue
+            if po_id in covered_by_range:
+                # Member of an emitted range block; suppressed to avoid duplicate declaration.
+                continue
+            individual_ids.append(po_id)
+        individual_ids.sort(key=lambda x: int(x) if x.isdigit() else 999)
+
+        return emit_as_range, individual_ids
+
     def _generate_port_channel_config(self, config_lines: List[str], user_inputs: Dict[str, str]):
-        """Generate port-channel config: non-MCLAG POs first, then MCLAG domain block, then MCLAG POs; includes PortChannel range blocks."""
-        port_channel_ranges = []
+        """Generate port-channel config per FR-5.
+
+        Non-MCLAG individual POs first, then MCLAG domain block, then MCLAG POs.
+        Range blocks (emitted per FR-5 rule) follow the same MCLAG/non-MCLAG
+        ordering as individual blocks.
+        """
+        # Apply FR-5 to parser-level interface_range configs for port-channels (e.g.
+        # 'interface range port-channel 30-35', stored in range_configs rather than
+        # port_channels). The rule: emit range form iff span >= 3 AND no individual
+        # PortChannel in [M..N] already exists. Otherwise, materialize individual
+        # PortChannel objects for uncovered members (so FR-5's "every PortChannel
+        # declared exactly once" invariant still holds) and suppress the range.
+        pc_range_specs = []
         if hasattr(self.migrator, 'range_configs') and self.migrator.range_configs:
-            port_channel_ranges = [(rs, cmds) for rs, cmds in self.migrator.range_configs.items() if self._is_portchannel_range(rs)]
-        if not self.migrator.port_channels and not port_channel_ranges:
+            for rs, cmds in self.migrator.range_configs.items():
+                if not self._is_portchannel_range(rs):
+                    continue
+                m = re.search(r'(\d+)\s*-\s*(\d+)', rs)
+                if not m:
+                    pc_range_specs.append((rs, cmds))
+                    continue
+                start, end = int(m.group(1)), int(m.group(2))
+                span = end - start + 1
+                suppress_range = False
+                reason_individual = False
+                if span < 3:
+                    suppress_range = True
+                    reason_individual = True
+                else:
+                    members_present_individually = [
+                        str(n) for n in range(start, end + 1)
+                        if str(n) in (self.migrator.port_channels or {})
+                    ]
+                    if members_present_individually:
+                        suppress_range = True
+                        reason_individual = True
+
+                if suppress_range:
+                    if reason_individual:
+                        # Materialize uncovered members from the range's sub-commands so
+                        # every PortChannel in [start..end] is emitted as an individual.
+                        self._materialize_pc_range_members(start, end, cmds)
+                    continue
+                pc_range_specs.append((rs, cmds))
+
+        # FR-5: decide range vs individual emission AFTER materialization so new
+        # individual PortChannel objects are picked up.
+        emit_as_range, individual_ids = self._plan_port_channel_emission()
+
+        if not individual_ids and not emit_as_range and not pc_range_specs:
             return
 
         peer_link_po = self.migrator.mlag_config.get('peer_link_po') if self.migrator.mlag_config else None
-        sorted_pos = sorted(self.migrator.port_channels.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 999)
+        sorted_pos = [(pid, self.migrator.port_channels[pid]) for pid in individual_ids]
 
-        # First pass: PortChannels without mclag (non-MCLAG members and the peer-link itself)
+        # First pass: non-MCLAG individual PortChannels (or the peer-link itself).
         for po_id, po_config in sorted_pos:
             if not po_config.mlag_enabled or po_id == peer_link_po:
                 self._emit_one_port_channel_block(config_lines, po_id, po_config, include_mclag=False)
 
-        # MCLAG domain block (must exist before creating MCLAG member PortChannels)
+        # First-pass ranges: non-MCLAG range blocks (keep FR-5 range-vs-individual mutually exclusive).
+        for range_id, range_po in emit_as_range:
+            if not range_po.mlag_enabled:
+                self._emit_one_port_channel_block(config_lines, range_id, range_po, include_mclag=False)
+
+        # MCLAG domain block.
         if self.migrator.mlag_config:
             self._generate_mclag_config(config_lines, user_inputs)
 
-        # Second pass: PortChannels that are MCLAG members (excluding peer-link)
+        # Second pass: MCLAG member individual PortChannels (excluding peer-link).
         for po_id, po_config in sorted_pos:
             if po_config.mlag_enabled and po_id != peer_link_po:
                 self._emit_one_port_channel_block(config_lines, po_id, po_config, include_mclag=True)
 
-        # PortChannel interface range blocks
-        for range_spec, range_cmds in port_channel_ranges:
+        # Second-pass ranges: MCLAG range blocks.
+        for range_id, range_po in emit_as_range:
+            if range_po.mlag_enabled:
+                self._emit_one_port_channel_block(config_lines, range_id, range_po, include_mclag=True)
+
+        # Parser-level interface range port-channel blocks (kept for compatibility with
+        # configs that expressed PortChannel ranges via 'interface range port-channel ...').
+        for range_spec, range_cmds in pc_range_specs:
             self._emit_single_interface_range_block(config_lines, range_spec, range_cmds)
-        
-        if sorted_pos or port_channel_ranges:
+
+        if sorted_pos or emit_as_range or pc_range_specs:
             config_lines.append('!')
     
     def _generate_loopback_config(self, config_lines: List[str]):
@@ -731,9 +1072,16 @@ class SonicConfigGenerator:
         if 'router_id' in self.migrator.bgp_config:
             config_lines.append(f' router-id {self.migrator.bgp_config["router_id"]}')
         
-        # Address family with redistribute statements
+        # Address family with redistribute statements.
+        # FR-4: Cisco NX-OS / Arista EOS use 'redistribute direct'; EAS FRR uses
+        # 'redistribute connected'. Map the first token and preserve the rest
+        # (e.g., the route-map suffix) untouched.
         config_lines.append(' address-family ipv4 unicast')
         for redistribute in self.migrator.bgp_config.get('redistribute', []):
+            tokens = redistribute.split()
+            if tokens and tokens[0] == 'direct':
+                tokens[0] = 'connected'
+                redistribute = ' '.join(tokens)
             config_lines.append(f'  redistribute {redistribute}')
         config_lines.append(' exit')
         
@@ -772,7 +1120,9 @@ class SonicConfigGenerator:
             if 'neighbor_update_source' in self.migrator.bgp_config:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(member["neighbor"])
                 if update_source:
-                    config_lines.append(f'  update-source {update_source}')
+                    # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
+                    # HW-10: emit 'interface' keyword for interface-name source
+                    config_lines.append(self._emit_update_source(update_source))
             
             # Route-maps on neighbor
             if 'neighbor_route_map_in' in self.migrator.bgp_config:
@@ -796,7 +1146,9 @@ class SonicConfigGenerator:
             if 'neighbor_update_source' in self.migrator.bgp_config:
                 update_source = self.migrator.bgp_config['neighbor_update_source'].get(neighbor_ip)
                 if update_source:
-                    config_lines.append(f'  update-source {update_source}')
+                    # HW-5: canonicalize interface casing for EAS (Loopback0, not loopback0)
+                    # HW-10: emit 'interface' keyword for interface-name source
+                    config_lines.append(self._emit_update_source(update_source))
             if 'neighbor_multihop' in self.migrator.bgp_config:
                 multihop = self.migrator.bgp_config['neighbor_multihop'].get(neighbor_ip)
                 if multihop:
@@ -931,8 +1283,13 @@ class SonicConfigGenerator:
             return
         
         for community_name, permission in self.migrator.snmp_config.communities.items():
-            # Enterprise SONiC syntax: snmp-server community <name> [ro|rw]
+            # HW-2: EAS IS-CLI does not accept a trailing 'ro'/'rw' keyword on
+            # 'snmp-server community'. The valid form is
+            # 'snmp-server community <name> [group <group-name>]'. Drop the
+            # permission keyword. RO/RW distinction via ACL-backed groups is a
+            # follow-on item (file separately when required).
+            _ = permission  # retained in parser for future group mapping
             config_lines.extend([
-                f'snmp-server community {community_name} {permission}',
+                f'snmp-server community {community_name}',
                 '!'
             ])

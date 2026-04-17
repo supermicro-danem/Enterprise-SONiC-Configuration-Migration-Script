@@ -10,7 +10,8 @@ import re
 from typing import Dict, List, Optional, Tuple
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
-    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry
+    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry,
+    sanitize_for_output
 )
 
 
@@ -672,7 +673,7 @@ class JuniperJunOSMigrator(BaseMigrator):
         if 'host-name' in statement:
             parts = statement.split()
             if len(parts) >= 2:
-                self.hostname = parts[1].strip('"')
+                self.hostname = sanitize_for_output(parts[1].strip('"'))
         
         elif 'name-server' in statement or ('name-server' in self.current_path and re.match(r'^\d+\.\d+\.\d+\.\d+', statement.strip())):
             # Name server IP can be on its own line within name-server block (no VRF in typical JunOS)
@@ -688,7 +689,7 @@ class JuniperJunOSMigrator(BaseMigrator):
             if len(parts) >= 1:
                 ntp_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', statement)
                 if ntp_match:
-                    server_ip = ntp_match.group(1)
+                    server_ip = sanitize_for_output(ntp_match.group(1))
                     if 'ntp_servers' not in self.global_settings:
                         self.global_settings['ntp_servers'] = []
                     self.global_settings['ntp_servers'].append(server_ip)
@@ -696,11 +697,11 @@ class JuniperJunOSMigrator(BaseMigrator):
                         self.global_settings['ntp_server'] = server_ip
                     if 'prefer' in statement.lower():
                         self.global_settings['ntp_preferred_server'] = server_ip
-        
+
         elif 'host' in statement and 'syslog' in self.current_path:
             syslog_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', statement)
             if syslog_match:
-                self.syslog_config.servers.append(syslog_match.group(1))
+                self.syslog_config.servers.append(sanitize_for_output(syslog_match.group(1)))
         
         elif 'radius-server' in self.current_path:
             self._parse_radius_config_junos(statement, line_num)
@@ -1405,12 +1406,12 @@ class JuniperJunOSMigrator(BaseMigrator):
         """Parse SNMP configuration"""
         # Handle 'community public' statement - extract community name
         if statement.startswith('community '):
-            community_name = statement.replace('community ', '').strip()
+            community_name = sanitize_for_output(statement.replace('community ', '').strip())
             if community_name:
                 # Initialize community with default permission if not already set
                 if community_name not in self.snmp_config.communities:
                     self.snmp_config.communities[community_name] = 'rw'  # default
-        
+
         # Handle authorization statements within community blocks
         elif any('community' in path_part for path_part in self.current_path):
             # Extract community name from path
@@ -1419,9 +1420,9 @@ class JuniperJunOSMigrator(BaseMigrator):
             for path_part in self.current_path:
                 if path_part.startswith('community '):
                     # Extract name from 'community public' format
-                    community_name = path_part.replace('community ', '').strip()
+                    community_name = sanitize_for_output(path_part.replace('community ', '').strip())
                     break
-            
+
             if community_name:
                 # Initialize community with default permission if not already set
                 if community_name not in self.snmp_config.communities:
@@ -1445,18 +1446,18 @@ class JuniperJunOSMigrator(BaseMigrator):
     def _parse_radius_config_junos(self, statement: str, line_num: int):
         """Parse RADIUS server configuration in JunOS format"""
         from base_migrator import RadiusConfig
-        
+
         radius_ip = None
         for path_part in self.current_path:
             if re.match(r'\d+\.\d+\.\d+\.\d+', path_part):
                 radius_ip = path_part
                 break
-        
+
         if radius_ip:
             if not self.radius_config:
                 self.radius_config = RadiusConfig()
-            
-            self.radius_config.host = radius_ip
+
+            self.radius_config.host = sanitize_for_output(radius_ip)
             
             if 'timeout' in statement:
                 timeout_match = re.search(r'timeout\s+(\d+)', statement)

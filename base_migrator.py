@@ -13,6 +13,22 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 
+def sanitize_for_output(value):
+    """Strip newline/carriage-return characters from a parsed config field
+    before it is stored in a dataclass. Prevents newline-injection attacks
+    where a crafted source config embeds \\n or \\r in a field value,
+    which would otherwise leak extra IS-CLI lines into the generated output.
+
+    Part of defense-in-depth; per-field allowlist validation is tracked
+    separately (see backlog issue #5).
+    """
+    if value is None:
+        return value
+    if isinstance(value, str):
+        return value.replace('\r\n', '').replace('\n', '').replace('\r', '')
+    return value
+
+
 @dataclass
 class VlanConfig:
     """Represents VLAN configuration"""
@@ -193,6 +209,13 @@ class BaseMigrator(ABC):
     def reset_state(self):
         """Reset parser state for new configuration"""
         self.hostname = ""
+        # HW-1/HW-7: spanning-tree mode as it appeared in the source config
+        # (free-form lowercase string, e.g. 'rstp', 'mstp', 'rapid-pvst',
+        # 'mst', 'pvst', or '' when not explicitly set). The generator
+        # normalizes this to the EAS-accepted set ('rapid-pvst' | 'mst' |
+        # 'pvst') and defaults to 'rapid-pvst' when no mode was parsed.
+        # EAS does NOT accept 'rstp' or 'mstp' as keywords.
+        self.stp_mode: str = ""
         self.management_ip = ""
         self.management_mask = ""
         self.management_gateway = ""
@@ -436,6 +459,7 @@ class BaseMigrator(ABC):
                     self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
                 # Set MTU on the PortChannel to match the interface
                 self.port_channels[po_id].mtu = intf_config.mtu
+                self.port_channels[po_id].mtu_configured = True
     
     def _interface_needs_vlan_assignment(self, intf_config: PhysicalInterfaceConfig) -> bool:
         """Check if interface needs VLAN 1 assignment"""

@@ -10,7 +10,8 @@ import re
 from typing import Dict, List, Optional
 from base_migrator import (
     BaseMigrator, VlanConfig, PortChannelConfig, PhysicalInterfaceConfig,
-    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry
+    LoopbackConfig, StaticRouteConfig, PrefixListEntry, RouteMapEntry,
+    sanitize_for_output
 )
 
 
@@ -54,36 +55,45 @@ class CiscoNXOSMigrator(BaseMigrator):
     
     def _parse_line(self, line: str, line_num: int):
         """Parse individual configuration line"""
-        
+
         # Exit commands (handle first)
         if line == 'exit':
             self._handle_exit()
-        
-        # Section start commands
-        elif line.startswith('interface '):
+            return
+
+        # Section start commands - return after handling so the consumed header line
+        # never falls through to the global else and is logged as unsupported.
+        if line.startswith('interface '):
             self._parse_interface_start(line)
-        
-        elif line.startswith('vlan '):
+            return
+
+        if line.startswith('vlan '):
             self._parse_vlan_start(line)
-        
-        elif line.startswith('router bgp'):
+            return
+
+        if line.startswith('router bgp'):
             self._parse_bgp_start(line)
-        
-        elif line.startswith('router vrrp'):
+            return
+
+        if line.startswith('router vrrp'):
             self.current_section = 'vrrp'
             self.push_context('router vrrp')
-        
-        elif line.startswith('vpc domain'):
+            return
+
+        if line.startswith('vpc domain'):
             self._parse_vpc_domain_start(line)
-        
-        elif line.startswith('router ospf'):
+            return
+
+        if line.startswith('router ospf'):
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
             self.current_section = 'ospf'
             self.push_context(line.strip())
-        elif line.startswith('aaa group server tacacs+'):
+            return
+        if line.startswith('aaa group server tacacs+'):
             self.current_section = 'aaa_tacacs'
             self.push_context(line.strip())
-        elif self.current_section == 'aaa_tacacs':
+            return
+        if self.current_section == 'aaa_tacacs':
             if line.strip().startswith('server '):
                 # Parse TACACS+ server IP (optional: store for reference; SONiC uses RADIUS)
                 pass
@@ -92,66 +102,73 @@ class CiscoNXOSMigrator(BaseMigrator):
             else:
                 self.current_section = 'global'
                 self.pop_context()
-        elif self.current_section == 'ospf':
+            return
+        if self.current_section == 'ospf':
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
-        elif line.startswith('route-map '):
+            return
+        if line.startswith('route-map '):
             self._parse_route_map_start(line)
-        elif line.startswith('ip prefix-list '):
+            return
+        if line.startswith('ip prefix-list '):
             self._parse_prefix_list_line(line)
-        elif self.current_section == 'route_map':
+            return
+        if self.current_section == 'route_map':
             self._parse_route_map_line(line)
-        elif line.startswith('line console') or line.startswith('line vty'):
+            return
+        if line.startswith('line console') or line.startswith('line vty'):
             self.current_section = 'line'
             self.push_context(line.strip())
-        
+            return
+
         # Global configuration parsing (check these first as they can appear anywhere)
         # Only "ip route ..." is a static route; "ip router ospf ..." is OSPF interface config (unsupported)
         parts_check = line.split()
         if len(parts_check) >= 3 and parts_check[0] == 'ip' and parts_check[1] == 'route':
             self._parse_static_route(line)
-        
+            return
+
         # Context-sensitive parsing
-        elif self.current_section == 'vlan' and self.current_vlan:
+        if self.current_section == 'vlan' and self.current_vlan:
             self._parse_vlan_config(line)
-        
+
         elif self.current_section == 'vlan_interface' and self.current_vlan:
             self._parse_vlan_interface_config(line)
-        
+
         elif (self.current_section == 'interface' or self.current_section == 'loopback') and self.current_interface:
             self._parse_interface_config(line)
-        
+
         elif self.current_section == 'port-channel' and self.current_po:
             self._parse_port_channel_config(line)
-        
+
         elif self.current_section == 'bgp':
             self._parse_bgp_config(line)
-        
+
         elif self.current_section == 'vrrp':
             self._parse_vrrp_config(line)
-        
+
         elif self.current_section == 'vpc':
             self._parse_vpc_config(line)
-        
+
         elif self.current_section == 'line':
             self.log_unsupported_feature(line, self.UNSUPPORTED_MSG)
-        
+
         # Global configuration parsing
         elif line.startswith('hostname'):
-            self.hostname = ' '.join(line.split()[1:])
-        
+            self.hostname = sanitize_for_output(' '.join(line.split()[1:]))
+
         elif line.startswith('ip address'):
             self._parse_ip_address(line)
-        
+
         elif line.startswith('ip gateway'):
             self._parse_ip_gateway(line)
-        
+
         elif line.startswith('username'):
             self._parse_username(line)
-        
+
         elif line.startswith('ntp server'):
             parts = line.split()
             if len(parts) >= 3:
-                server_ip = parts[2]
+                server_ip = sanitize_for_output(parts[2])
                 if 'ntp_servers' not in self.global_settings:
                     self.global_settings['ntp_servers'] = []
                 self.global_settings['ntp_servers'].append(server_ip)
@@ -159,9 +176,9 @@ class CiscoNXOSMigrator(BaseMigrator):
                     self.global_settings['ntp_server'] = server_ip
                 if len(parts) > 3 and parts[3].lower() == 'prefer':
                     self.global_settings['ntp_preferred_server'] = server_ip
-        
+
         elif line.startswith('logging server'):
-            server_ip = line.split()[2]
+            server_ip = sanitize_for_output(line.split()[2])
             self.syslog_config.servers.append(server_ip)
         
         elif line.startswith('radius-server host'):
@@ -169,6 +186,15 @@ class CiscoNXOSMigrator(BaseMigrator):
         
         elif line.startswith('snmp-server community'):
             self._parse_snmp_community(line)
+
+        elif line.startswith('spanning-tree mode '):
+            # HW-1/HW-7: NX-OS supports 'rapid-pvst', 'mst'. Record the
+            # source-config keyword; the generator normalization map
+            # translates it to the EAS-accepted form
+            # (rapid-pvst | mst | pvst).
+            parts = line.split()
+            if len(parts) >= 3:
+                self.stp_mode = parts[2].lower()
         
         elif line.startswith('ip name-server'):
             # DNS: ip name-server <ip> [<ip> ...] (NX-OS typically no VRF)
@@ -207,7 +233,7 @@ class CiscoNXOSMigrator(BaseMigrator):
         """Parse username configuration"""
         parts = line.split()
         if len(parts) >= 2:
-            username = parts[1]
+            username = sanitize_for_output(parts[1])
             # Extract role
             role = 'user'
             if 'role' in line:
@@ -217,17 +243,17 @@ class CiscoNXOSMigrator(BaseMigrator):
                     if 'admin' in role_part.lower():
                         role = 'admin'
                     else:
-                        role = role_part
-            
+                        role = sanitize_for_output(role_part)
+
             self.users[username] = {
                 'password': '<password>',  # Will be prompted
                 'role': role
             }
-    
+
     def _parse_vlan_start(self, line: str):
         """Parse VLAN section start"""
         vlan_spec = line.split()[1]
-        
+
         # Handle VLAN ranges like "100-105"
         if '-' in vlan_spec and not vlan_spec.startswith('-') and not vlan_spec.endswith('-'):
             try:
@@ -279,13 +305,20 @@ class CiscoNXOSMigrator(BaseMigrator):
             intf_type = parts[1]
             
             if intf_type == 'port-channel':
-                # Handle 'interface port-channel X' - just creation, no config follows
+                # Handle 'interface port-channel X' or 'interface port-channel M-N' (range form).
+                # Set up port-channel context so sub-commands are parsed, not logged as unsupported.
                 po_id = parts[2] if len(parts) > 2 else ''
-                if po_id not in self.port_channels:
-                    self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
-                self.current_section = 'interface'
-                self.current_po = None
-                self.current_interface = None
+                if po_id:
+                    if po_id not in self.port_channels:
+                        self.port_channels[po_id] = PortChannelConfig(po_id=po_id)
+                    self.current_section = 'port-channel'
+                    self.current_po = po_id
+                    self.current_interface = None
+                    self.push_context(f'interface port-channel {po_id}')
+                else:
+                    self.current_section = 'interface'
+                    self.current_po = None
+                    self.current_interface = None
             
             elif intf_type.lower().startswith('port-channel'):
                 # Handle 'interface port-channel20' (NX-OS no space) - config follows
@@ -340,11 +373,23 @@ class CiscoNXOSMigrator(BaseMigrator):
             
             elif intf_type.startswith('Ethernet') or intf_type.startswith('ethernet'):
                 interface = ' '.join(parts[1:])
-                self.current_interface = interface
-                self.current_section = 'interface'
-                if interface not in self.physical_interfaces:
-                    self.physical_interfaces[interface] = PhysicalInterfaceConfig(interface=interface)
-                self.push_context(f'interface {interface}')
+                # FR-6: 'interface ethernet N/M-K' is a vendor range form used in NX-OS
+                # configs and run-book templates. Route it to the range path so the
+                # generator emits canonical EAS 'interface range Eth M/A-M/B' rather
+                # than leaking the source-form literal string.
+                if re.search(r'ethernet\s+\d+/\d+\s*-\s*\d+', interface, re.IGNORECASE):
+                    range_spec = f'range {interface}'
+                    self.current_interface = range_spec
+                    self.current_section = 'interface'
+                    if range_spec not in self.range_configs:
+                        self.range_configs[range_spec] = []
+                    self.push_context(f'interface {range_spec}')
+                else:
+                    self.current_interface = interface
+                    self.current_section = 'interface'
+                    if interface not in self.physical_interfaces:
+                        self.physical_interfaces[interface] = PhysicalInterfaceConfig(interface=interface)
+                    self.push_context(f'interface {interface}')
     
     def _parse_interface_config(self, line: str):
         """Parse physical interface configuration"""
@@ -424,7 +469,7 @@ class CiscoNXOSMigrator(BaseMigrator):
         elif line.startswith('no shutdown'):
             intf.shutdown = False
         elif line.startswith('lldp'):
-            intf.lldp_settings.append(line)
+            intf.lldp_settings.append(sanitize_for_output(line))
         elif line.startswith('vpc '):
             # VPC configuration on interface
             if 'peer-link' in line:
@@ -474,7 +519,10 @@ class CiscoNXOSMigrator(BaseMigrator):
             
         vlan = self.vlans[self.current_vlan]
         
-        if line.startswith('ip address '):
+        if line.startswith('description '):
+            # SVI description overrides the L2 VLAN name-based description
+            vlan.description = ' '.join(line.split()[1:])
+        elif line.startswith('ip address '):
             parts = line.split()
             if len(parts) >= 3:
                 vlan.ip_address = parts[2]
@@ -483,6 +531,9 @@ class CiscoNXOSMigrator(BaseMigrator):
         elif line.startswith('mtu '):
             vlan.mtu = int(line.split()[1])
             vlan.mtu_configured = True
+        elif line.startswith('no shutdown') or line.startswith('shutdown'):
+            # SVI up/down state; SVIs default to up in SONiC. Accept as known no-op.
+            pass
         elif line.startswith('vrrp '):
             # VRRP configuration under interface vlan
             # Format 1: "vrrp 1 ip 192.168.100.254", "vrrp 1 priority 110", "vrrp 1 preempt" (single line or multi)
@@ -827,14 +878,14 @@ class CiscoNXOSMigrator(BaseMigrator):
     def _parse_radius_config(self, line: str):
         """Parse RADIUS server configuration"""
         from base_migrator import RadiusConfig
-        
+
         parts = line.split()
         if len(parts) >= 3 and parts[1] == 'host':
             if not self.radius_config:
                 self.radius_config = RadiusConfig()
-            
-            self.radius_config.host = parts[2]
-            
+
+            self.radius_config.host = sanitize_for_output(parts[2])
+
             # Parse optional parameters
             i = 3
             while i < len(parts):
@@ -846,19 +897,19 @@ class CiscoNXOSMigrator(BaseMigrator):
                         self.radius_config.retransmit = int(parts[i + 1])
                         i += 2
                     elif parts[i] == 'key':
-                        self.radius_config.key = parts[i + 1].strip('"')
+                        self.radius_config.key = sanitize_for_output(parts[i + 1].strip('"'))
                         i += 2
                     else:
                         i += 1
                 else:
                     i += 1
-    
+
     def _parse_snmp_community(self, line: str):
         """Parse SNMP community configuration"""
         # Format: snmp-server community <name> [ro|rw]
         parts = line.split()
         if len(parts) >= 3:
-            community_name = parts[2]
+            community_name = sanitize_for_output(parts[2])
             # Default to read-write if not specified, but check for ro/rw
             permission = 'rw'  # default
             if len(parts) >= 4:
@@ -899,9 +950,9 @@ class CiscoNXOSMigrator(BaseMigrator):
             self.current_section = 'global'
             return
         if stripped.startswith('match '):
-            entries[-1].matches.append(stripped)
+            entries[-1].matches.append(sanitize_for_output(stripped))
         elif stripped.startswith('set '):
-            entries[-1].sets.append(stripped)
+            entries[-1].sets.append(sanitize_for_output(stripped))
         else:
             self.current_section = 'global'
     

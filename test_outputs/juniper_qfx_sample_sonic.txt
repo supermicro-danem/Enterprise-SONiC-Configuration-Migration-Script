@@ -1,54 +1,66 @@
-! After entering "sonic-cli" and pressing Enter, you will be in the SONiC CLI shell.
-! You can then copy/paste the configuration commands below in sections.
+! Enter the SONiC CLI shell, then paste the commands below.
+! They form one atomic configure-terminal session.
 sonic-cli
 !
 configure terminal
 !
 hostname QFX-Switch-01
 interface-naming standard
-write memory
-!
+end
 exit
-!
-! Exit sonic-cli and re-enter to apply interface-naming standard changes.
+! ============================================================
+! PASTE BOUNDARY: exit sonic-cli and re-enter before continuing.
+! interface-naming standard takes effect only on a fresh
+! sonic-cli session. In the Linux shell run:
+!   exit
+!   sonic-cli
+! Then resume pasting below.
+! ============================================================
 sonic-cli
 !
 configure terminal
 !
-spanning-tree enable
+spanning-tree mode rapid-pvst
 !
 ip vrf mgmt
+!
 interface Management 0
-ip address 192.168.10.1/24 gwaddr 192.168.10.254
+  ip address 192.168.10.1/24 gwaddr 192.168.10.254
 exit
 !
-username admin password testpass123 role admin
+username admin password CHANGE_ME_PLACEHOLDER role admin
 !
 interface PortChannel 10 mode active
   description "Uplink-PortChannel"
   switchport trunk allowed vlan 100,200
 exit
+!
 interface PortChannel 20 mode active
   description "Peer-Link"
   ! WARNING: Original config had "all VLANs" - configure manually if needed
   switchport access vlan 1
 exit
+!
 interface PortChannel 30 mode active
   description "PortChannel-30"
   switchport trunk allowed vlan 100,200
 exit
+!
 interface PortChannel 31 mode active
   description "PortChannel-31"
   switchport trunk allowed vlan 100,200
 exit
+!
 interface PortChannel 32 mode active
   description "PortChannel-32"
   switchport trunk allowed vlan 100,200
 exit
 !
 mclag domain 99
-source-ip 192.168.10.1
-peer-ip 192.168.10.2
+  source-ip 192.168.10.1
+  peer-ip 192.168.10.2
+exit
+!
 !
 logging server 10.2.2.1
 !
@@ -63,91 +75,107 @@ ip name-server source-interface Management 0
 ip name-server 8.8.8.8
 ip name-server 8.8.4.4
 !
-radius-server host 10.3.3.1 key testkey123 retransmit 3 timeout 10
+radius-server host 10.3.3.1 key CHANGE_ME_PLACEHOLDER retransmit 3 timeout 10
 !
 aaa authentication login default group radius local
 aaa authentication login console local
 !
-snmp-server community public ro
+snmp-server community public
 !
-snmp-server community private rw
+snmp-server community private
 !
 interface vlan 1
   description "default"
 exit
+!
 interface vlan 100
   description "Server network VLAN"
   vrrp 1 ipv4 192.168.100.254 priority 100 preempt
   ip address 192.168.100.1/24
 exit
+!
 interface vlan 200
   description "Management network"
   ip address 192.168.200.1/24
 exit
+!
 interface vlan 300
   description "Storage-VLAN"
 exit
+!
 !
 interface Eth 1/0
   description "Server-01"
   switchport trunk allowed vlan 100,200
   no shutdown
 exit
+!
 interface Eth 1/1
   description "Server-02"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/2
   description "Uplink-to-Core"
   switchport trunk allowed vlan 100,200,300
   no shutdown
 exit
+!
 interface Eth 1/3
   description "Port-Channel-Member"
   channel-group 10
   no shutdown
 exit
+!
 interface Eth 1/4
   description "Port-Channel-Member"
   channel-group 10
   no shutdown
 exit
+!
 interface Eth 1/5
   description "Server-05"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/6
   description "Server-06"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/7
   description "Server-07"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/8
   description "Server-08"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/9
   description "Server-09"
   switchport access vlan 100
   no shutdown
 exit
+!
 interface Eth 1/10
   description "Server-10"
   switchport access vlan 100
   no shutdown
 exit
 !
+!
 interface lo0
   description "Router-ID-Loopback"
   ip address 10.0.0.1/32
 exit
+!
 !
 ip route 0.0.0.0/0 192.168.200.254
 !
