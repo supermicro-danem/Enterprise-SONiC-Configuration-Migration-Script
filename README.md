@@ -312,7 +312,7 @@ This tool has been validated against live Supermicro SSE-T8164 running Enterpris
 - `ip vrf mgmt` is auto-emitted before Management0 when an OOB management interface is configured.
 
 **Hardware-target limitations (not generator defects):**
-- **Speed keywords**: SSE-T8164 is a 100G/400G-only platform; sample fixtures that target 1G/10G access-switch speeds will see `%Error: Unsupported speed` on the applicable interfaces. This is a hardware/source-config mismatch.
+- **Speed keywords**: SSE-T8164 supports 100G/200G/400G/800G (64x OSFP 800G ports with 1x800G, 2x400G, 4x200G, or 8x100G breakout options); sample fixtures that target 1G/10G/25G/40G access-switch speeds will see `%Error: Unsupported speed` on the applicable interfaces. This is a hardware/source-config mismatch.
 - **Undefined route-maps**: If a source configuration references a route-map under BGP `redistribute` that it does not define, EAS rejects the command with `%Error: No instance found`. The source config must provide the referenced route-map definitions.
 
 ## Version History
